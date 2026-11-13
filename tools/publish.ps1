@@ -1,4 +1,4 @@
-# Publishes a new Cultist version to GitHub:
+﻿# Publishes a new Cultist version to GitHub:
 #   takes the mod from Desktop\Покет\Флагеллянт (the installed copy) and the sources from Desktop\Покет\Исходники\Флагеллянт,
 #   refreshes install/ and source/, builds Cultist_PocketRogues_v<Version>.zip, commits, pushes and makes a Release with the zip.
 # Usage:  powershell -ExecutionPolicy Bypass -File tools\publish.ps1 -Version 2.5.0 -Notes "что нового"

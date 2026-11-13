@@ -159,6 +159,10 @@ namespace FlagellantMod
             Traverse.Create(n).Field("customValues").SetValue(list);
         }
 
+        /// a working part that does not show its line under the description (the user didn't want the area line;
+        /// it still sets the size of the hit zone)
+        static SkillDamageInjectContainer NoLine(SkillDamageInjectContainer n) { n.showDescriptionLine = false; return n; }
+
         /// a working part whose value follows a 25-level table (one line on the screen: "10 -> 20")
         static SkillDamageInjectContainer Tab(SkillDamageInjectContainer n, float[] t) { PerLevel(n, t, 0); return n; }
 
@@ -296,7 +300,7 @@ namespace FlagellantMod
             var BigCast = CharacterSkill.AnimationTriggers.WizStr;
             var Heal = CharacterSkill.AnimationTriggers.WizHeal;
 
-            var bludge = c.DamageTypes.Phys_bludge;
+            var bludge = c.DamageTypes.Phys_bludge; var slash = c.DamageTypes.Phys_slash;
             var heavyHands = D("SlowlyFight"); var weakness = D("WeaknessReduceDmg"); var slow = D("SlowlyWeb");
 
             // Every skill shows its numbers as stat lines under the description, like the game's own skills:
@@ -321,7 +325,7 @@ namespace FlagellantMod
             s1.animationID = A;
             foreach (var l in AllLvls(s1))
                 SetInj(l, bludge,
-                    MainTab(T_Strike, 3), Inj(Range, 60f, 0f), Inj(Repl, 100f, 0f, dmg: bludge),
+                    MainTab(T_Strike, 3), NoLine(Inj(Range, 60f, 0f)), Inj(Repl, 100f, 0f, dmg: bludge),
                     Tab(Inj(Stat, 10f, 0f, stat: SkillDamageInjectContainer.StatEffects.Bleed), Steps(0, 10f, 12, 20f, 25, 30f)),
                     heavyHands != null ? Inj(Deb, 25f, 0f, 25, 50, debuff: heavyHands, time: 6f) : null);
 
@@ -330,8 +334,8 @@ namespace FlagellantMod
             var s2 = Make(bone, "poisonLash", SO_Skill.SkillType.StrengthSkill, Def(bers.skills_Power, 0));
             s2.animationID = A;
             foreach (var l in AllLvls(s2))
-                SetInj(l, bludge,
-                    MainTab(T_Strike, 3), Line("hits", 2f, icon: dmgIco), Line("whipReach", 0f, icon: rangeIco), Inj(Range, 50f, 0f), Inj(Repl, 100f, 0f, dmg: bludge),
+                SetInj(l, slash,                                                   // a whip cuts (the user: slashing, not blunt)
+                    MainTab(T_Strike, 3), Line("hits", 2f, icon: dmgIco), Line("whipReach", 0f, icon: rangeIco), NoLine(Inj(Range, 50f, 0f)), Inj(Repl, 100f, 0f, dmg: slash),
                     Tab(Inj(Stat, 10f, 0f, stat: SkillDamageInjectContainer.StatEffects.Poison), Steps(0, 10f, 12, 20f, 25, 30f)),
                     weakness != null ? Inj(Deb, 30f, 0f, 12, 50, debuff: weakness, time: 6f) : null,
                     Line("undead", 40f, 25, icon: dmgIco));
@@ -341,7 +345,7 @@ namespace FlagellantMod
             s3.animationID = Lunge;
             foreach (var l in AllLvls(s3))
                 SetInj(l, bludge,
-                    MainTab(T_Sinner, 5), Line("hits", 3f, icon: dmgIco), Inj(Range, 50f, 0f), Inj(Repl, 100f, 0f, dmg: bludge),
+                    MainTab(T_Sinner, 5), Line("hits", 3f, icon: dmgIco), NoLine(Inj(Range, 50f, 0f)), Inj(Repl, 100f, 0f, dmg: bludge),
                     Tab(Inj(Armor, 10f, 0f), Steps(0, 10f, 12, 15f, 25, 20f)),
                     Line("heavyCrit", 15f, 25, icon: critIco));
 
@@ -366,7 +370,7 @@ namespace FlagellantMod
             x2.animationSpeedMod = main.animationSpeedMod / 1.4f;
             foreach (var l in AllLvls(x2))
                 SetInj(l, bludge,
-                    MainTab(T_Hammer, 5), Inj(Range, 80f, 0f), Inj(Repl, 100f, 0f, dmg: bludge),
+                    MainTab(T_Hammer, 5), NoLine(Inj(Range, 80f, 0f)), Inj(Repl, 100f, 0f, dmg: bludge),
                     Tab(Inj(SkillDamageInjectContainer.InjectTypes.IgnoreArmor, 25f, 0f), T_HammerArmor),
                     Line("stun", Steps(12, 7f, 25, 15f), 12, icon: powerIco));
 
@@ -409,8 +413,8 @@ namespace FlagellantMod
             p3.animationID = A;
             p3.animationSpeedMod = main.animationSpeedMod * 1.35f;                 // a sped-up attack
             foreach (var l in AllLvls(p3))
-                SetInj(l, bludge,
-                    MainTab(T_Snap, 4), Line("snapLine", 0f, icon: rangeIco), Inj(Range, 50f, 0f), Inj(Repl, 100f, 0f, dmg: bludge),
+                SetInj(l, slash,
+                    MainTab(T_Snap, 4), Line("snapLine", 0f, icon: rangeIco), NoLine(Inj(Range, 50f, 0f)), Inj(Repl, 100f, 0f, dmg: slash),
                     Line("snapCrit", 0f, icon: critIco),
                     Line("snapSpeed", T_SnapSpeed, icon: powerIco));
 

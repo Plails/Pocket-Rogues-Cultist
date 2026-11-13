@@ -281,7 +281,7 @@ namespace FlagellantMod
 
         // ---------------- Hammer of Penance: the spiked ball on its chain goes round over his head (from behind him),
         // then comes down in front of him; cracks in the ground, dust and stone chips where it lands
-        public const float HammerSpin = 0.13f, HammerFall = 0.07f;
+        public const float HammerSpin = 0.13f / 0.7f, HammerFall = 0.07f / 0.7f;   // 30% slower (the user: the ball whirled too fast)
         /// the head and the chain of the hammer follow the flail in his hand (the same pieces as his lash);
         /// without one of the Cultist's flails it is a plain spiked mace on an iron chain
         static (Sprite head, Sprite link, float headScale) HammerLook(Character ch)
