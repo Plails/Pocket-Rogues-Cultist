@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $git = 'C:\Program Files\Git\cmd\git.exe'
 $gh = 'C:\Program Files\GitHub CLI\gh.exe'
+$env:PATH = 'C:\Program Files\Git\cmd;' + $env:PATH          # gh needs git on PATH
 $desk = [Environment]::GetFolderPath('Desktop')
 $modSrc = Join-Path $desk 'Покет\Флагеллянт\BepInEx'
 $codeSrc = Join-Path $desk 'Покет\Исходники\Флагеллянт'
