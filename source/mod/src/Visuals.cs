@@ -91,6 +91,7 @@ namespace FlagellantMod
             // the swing starts on his right side and goes across to the left (the strike), then lashes back to the right
             const float FromAng = -75f, ToAng = 35f, BackAng = -40f, Retract = 0.16f, WaveAmp = 10f, WaveHz = 4.5f;
             const float Overshoot = 1.7f, BendPow = 1.4f;
+            const float ArmPart = 0.35f;                 // how much of the lash (from the fist) lies along the arm before it bends
             WhipKind kind;
             readonly System.Collections.Generic.List<(SpriteRenderer[] segs, SpriteRenderer tip, float angOff, float len)> lashes = new System.Collections.Generic.List<(SpriteRenderer[], SpriteRenderer, float, float)>();
             float t; int cracked; float done;
@@ -171,6 +172,11 @@ namespace FlagellantMod
                 // it comes out of the hand that holds the weapon (and follows it through the attack animation)
                 Vector2 hand = (Vector2)hero.transform.position + (Vector2)hero.transform.right * 0.15f;
                 try { if (hero.RightHandSprite != null) hand = hero.RightHandSprite.transform.position; } catch { }
+                // the line of his arm (from his body to the fist): the lash starts as a continuation of the arm and only
+                // further out bends into the swing (the user: "кнут должен быть как продолжение руки")
+                Vector2 arm = hand - (Vector2)hero.transform.position;
+                bool hasArm = arm.sqrMagnitude > 0.0025f;
+                float armA = hasArm ? Mathf.Atan2(arm.y, arm.x) * Mathf.Rad2Deg : 0f;
                 float unroll = 0.3f + 0.7f * EaseOut(t / (kind.s1 * 0.7f));                    // shoots out of the hand
                 // a wave running along the lash, strongest right after each crack, fading out
                 float c1 = kind.s1, c2 = kind.s1 + kind.s2;
@@ -188,6 +194,11 @@ namespace FlagellantMod
                     {
                         float f = i / (float)n;
                         float a = facing + angOff + dir * (Ang(t, f) + wave * f * Mathf.Sin((f * 1.6f - t * WaveHz) * Mathf.PI * 2f));
+                        if (hasArm)
+                        {
+                            float k = Mathf.Clamp01(f / ArmPart); k = k * k * (3f - 2f * k);  // 0 at the fist .. 1 a third along
+                            a = Mathf.LerpAngle(armA + angOff * 0.3f, a, k);
+                        }
                         Vector2 d = new Vector2(Mathf.Cos(a * Mathf.Deg2Rad), Mathf.Sin(a * Mathf.Deg2Rad));
                         if (i < n)
                         {
@@ -281,7 +292,7 @@ namespace FlagellantMod
 
         // ---------------- Hammer of Penance: the spiked ball on its chain goes round over his head (from behind him),
         // then comes down in front of him; cracks in the ground, dust and stone chips where it lands
-        public const float HammerSpin = 0.13f / 0.7f, HammerFall = 0.07f / 0.7f;   // 30% slower (the user: the ball whirled too fast)
+        public const float HammerSpin = 0.13f / 0.25f, HammerFall = 0.07f / 0.25f; // 25% of the first speed (the user/MRX); the hit waits for it
         /// the head and the chain of the hammer follow the flail in his hand (the same pieces as his lash);
         /// without one of the Cultist's flails it is a plain spiked mace on an iron chain
         static (Sprite head, Sprite link, float headScale) HammerLook(Character ch)

@@ -571,7 +571,10 @@ namespace FlagellantMod
         {
             FlagRuntime.StartEcstasy(ch, L(lvl), 15f);
             Vector2 me = ch.transform.position;
-            FV.Ecstasy(me, ch.transform);
+            // the FIRST look of the skill is back (the user): a spray of his blood and a crimson burst on him
+            // (the game-style FV.Ecstasy is no longer used)
+            Splash(ch, me, 16, 3f, 1.3f);
+            Fx("fist_burst", me, 0f, 1.2f, BloodCol, 0.35f, ch, 34, 1.6f);
             Popup(me + Vector2.up * 0.8f, Texts.Get("FLG/Ecstasy"), BloodCol);
             Shake(0.1f, 0.1f);
         }
