@@ -32,3 +32,4 @@
 - `source/mod/` — код мода (C#, BepInEx 5 + Harmony; собирается `dotnet build -c Release`, путь к игре — в `FlagellantMod.csproj`).
 - `source/ArtGen/` — генератор пиксельных картинок мода (иконки, оружие, эффекты), `source/art/` — сами картинки.
 - `CHANGELOG.md` — что менялось в каждой версии.
+- `OccultSanctum/` — отдельный мод-локация **Оккультное святилище** (подлокация Крипты Пустоты с культистами): готовый мод и исходники, установка — в `OccultSanctum/README.md`.
