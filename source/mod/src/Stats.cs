@@ -40,6 +40,30 @@ namespace FlagellantMod
         }
     }
 
+    /// the hero's screen marks the main attribute in orange: for the Cultist that is Endurance, not the Berserker's Strength
+    [HarmonyPatch(typeof(CharacterStatsManager), "UpdateStats")]
+    internal static class MainAttributeShownPatch
+    {
+        static void Postfix(CharacterStatsManager __instance)
+        {
+            try
+            {
+                var tr = Traverse.Create(__instance);
+                var ch = tr.Field("character").GetValue<Character>();
+                if (ch == null || ch.charClass != CharacterClasses.BERSERKER || !Flag.Active) return;
+                var orange = new Color(1f, 0.6f, 0f, 1f);
+                void Set(string text, string value, Color c)
+                {
+                    var t = tr.Field(text).GetValue<UnityEngine.UI.Text>(); if (t != null) t.color = c;
+                    var v = tr.Field(value).GetValue<UnityEngine.UI.Text>(); if (v != null) v.color = c;
+                }
+                Set("stats_StrText", "stats_StrValue", Color.white);
+                Set("stats_EndText", "stats_EndValue", orange);
+            }
+            catch { }
+        }
+    }
+
     /// +2 HP per second base regeneration (shown in the hero's stats too)
     [HarmonyPatch(typeof(Creature), nameof(Creature.HP_reg), MethodType.Getter)]
     internal static class RegenPatch

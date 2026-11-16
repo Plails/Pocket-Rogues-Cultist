@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -116,11 +116,33 @@ namespace FlagellantMod
             return res;
         }
 
-        static void HitContainers(Character ch, Controller src, Vector2 at, float r)
+        public static void HitContainers(Character ch, Controller src, Vector2 at, float r)
         {
-            foreach (var col in Physics2D.OverlapCircleAll(at, r, Mask(ch)))
-                if (col != null && col.TryGetComponent<Container>(out var box))
+            foreach (var col in Physics2D.OverlapCircleAll(at, r, Mask(ch) | WallMask(src)))
+            {
+                if (col == null) continue;
+                if (col.TryGetComponent<Container>(out var box))
                     try { if (!src.ObstacleToTarget(col.transform.position, checkDestroyable: false)) box.SetDamage(ch.attackDamageContainers); } catch { }
+                else if (col.TryGetComponent<DestroyableWall>(out var wall))
+                    // a breakable wall: the game's own hit on it (it takes a hit only from close by, like any attack)
+                    try { if (!src.ObstacleToTarget(col.transform.TransformPoint(col.offset.x, col.offset.y, 0f), checkDestroyable: false)) wall.SetDamage(1f, ch.transform.position); } catch { }
+            }
+        }
+
+        /// walls and breakable walls (what stops a lash)
+        public static int WallMask(Controller src)
+        {
+            try { return (int)src.obstaclesLayer | (int)src.destrObstaclesLayer; } catch { return 0; }
+        }
+
+        /// how far one can reach from a point in a direction before a wall (or a breakable wall)
+        public static float ToWall(Controller src, Vector2 from, Vector2 dir, float max)
+        {
+            int m = WallMask(src);
+            if (m == 0) return max;
+            if (Physics2D.OverlapPoint(from, m) != null) return 0.2f;
+            var hit = Physics2D.Raycast(from, dir, max, m);
+            return hit.collider != null ? Mathf.Max(0.2f, hit.distance) : max;
         }
 
         public static float Facing(Character ch) => Mathf.Atan2(ch.transform.right.y, ch.transform.right.x) * Mathf.Rad2Deg;
@@ -301,6 +323,12 @@ namespace FlagellantMod
             GameFx.Slash(src, RangePct(sl, lvl));                                 // the game's own weapon trail
             // ONE whip comes out of his hand and lashes there and back; each blow lands exactly when its tip cracks
             float reach0 = GameZone(ch, RangePct(sl, lvl)).reach;
+            {
+                // a wall in front cuts the lash short (it never passes through one)
+                float full = FV.WhipLength(ch, reach0);
+                float wallAt = ToWall(src, ch.transform.position, ch.transform.right, full);
+                if (wallAt < full) reach0 *= wallAt / full;
+            }
             var snaps = FV.LashWhip(ch, reach0);
             float whip = FV.WhipLength(ch, reach0);                               // the hits go as far as the lash reaches
             float waited = 0f;
@@ -332,18 +360,21 @@ namespace FlagellantMod
                 {
                     var z = GameZone(ch, RangePct(sl, lvl));
                     GameFx.Slash(src, RangePct(sl, lvl));
-                    target = InZone(ch, src, z).FirstOrDefault();
+                    target = InZone(ch, src, z).FirstOrDefault();                    // (InZone breaks the things and walls in the zone too)
                     if (target == null) yield break;
                 }
                 else
                 {
                     // the next sinner: the nearest enemy not hit yet, within 4.5 units and in sight
-                    target = Enemies(ch, me, 4.5f).Where(t => !done.Contains(t)).OrderBy(t => ((Vector2)t.transform.position - me).sqrMagnitude)
-                        .FirstOrDefault(t => { try { return !src.ObstacleToTarget(t.transform.position); } catch { return true; } });
+                    // (a new one first; with none left, one already struck takes the blow again - MRX)
+                    var near = Enemies(ch, me, 4.5f).Where(t => { try { return !src.ObstacleToTarget(t.transform.position); } catch { return true; } })
+                        .OrderBy(t => ((Vector2)t.transform.position - me).sqrMagnitude).ToList();
+                    target = near.FirstOrDefault(t => !done.Contains(t)) ?? near.FirstOrDefault();
                     if (target == null) yield break;
                     Vector2 tp0 = target.transform.position;
                     Vector2 to = tp0 + (me - tp0).normalized * (BodyRadius(target) + 0.45f);
-                    if (Physics2D.OverlapCircle(to, 0.25f, mask) == null)
+                    bool close = (tp0 - me).magnitude <= BodyRadius(target) + 0.9f;          // (already at it: he strikes from where he stands)
+                    if (!close && Physics2D.OverlapCircle(to, 0.25f, mask) == null)
                     {
                         // he vanishes in a dark beam and lands in dust next to the next sinner; red lightning runs along the way
                         FV.SinnerVanish(me);
@@ -447,6 +478,7 @@ namespace FlagellantMod
                 trail += dt;
                 if (trail > 0.03f) { trail = 0f; Fx("blood_drop", p - dir * 0.3f, 0f, 0.9f, new Color(1f, 1f, 1f, 0.8f), 0.25f, ch, 38, 0.5f); }
                 if (mask != 0 && Physics2D.OverlapCircle(p, 0.1f, mask) != null) { Pop(); return; }
+                if (src != null && Physics2D.OverlapCircle(p, 0.15f, (int)src.destrObstaclesLayer) != null) { HitContainers(ch, src, p, 0.5f); Pop(); return; }
                 foreach (var t in Enemies(ch, p, 0.3f))
                 {
                     if (!Ready(t)) continue;
@@ -509,6 +541,7 @@ namespace FlagellantMod
             float costPct = FlagSkills.At(FlagSkills.T_WrathCost, l);
             float stunChance = l >= 25 ? 0.1f : l >= 12 ? 0.05f : 0f;
             FV.Wrath(me, R);                                                    // the circles are back (the user), only smaller
+            HitContainers(ch, src, me, R);
             Shake(0.25f, 0.25f);
             Sound(PrefabsContainerManager.Instance?.sfx_explosion, me);
             int n = 0;
@@ -602,28 +635,25 @@ namespace FlagellantMod
         static IEnumerator QuickSnap(Character ch, Controller src, SkillLvl sl, DamageStruct dmg, int lvl)
         {
             int l = L(lvl);
-            Vector2 hand = ch.transform.position;
-            try { if (ch.RightHandSprite != null) hand = ch.RightHandSprite.transform.position; } catch { }
+            Vector2 hand = FV.WhipHand(ch);
             Vector2 fwd = ch.transform.right;
             float max = FV.WhipLength(ch, GameZone(ch, RangePct(sl, lvl)).reach) * 1.25f;
-            // a wall stops the lash
-            float reach = max;
-            try
-            {
-                int wall = src.obstaclesLayer;
-                if (wall != 0) { var hit = Physics2D.Raycast(hand, fwd, max, wall); if (hit.collider != null) reach = Mathf.Max(0.3f, hit.distance); }
-            }
-            catch { }
-            // the first enemy on the line
+            // a wall stops the lash (walls and breakable walls; checked from his body, so a hand over a wall's edge does not reach past it)
+            Vector2 body = ch.transform.position;
+            float reach = Mathf.Max(0.3f, ToWall(src, body, fwd, max + Vector2.Dot(hand - body, fwd)) - Vector2.Dot(hand - body, fwd));
+            reach = Mathf.Min(reach, ToWall(src, hand, fwd, max));
+            // the first enemy whose body the lash's line crosses (the line the lash is drawn on: from the whip hand straight ahead)
             Creature target = null; float along = reach;
-            foreach (var t in Enemies(ch, hand + fwd * (reach * 0.5f), reach * 0.5f + 0.6f))
+            foreach (var t in Enemies(ch, hand + fwd * (reach * 0.5f), reach * 0.5f + 0.8f))
             {
                 Vector2 d = (Vector2)t.transform.position - hand;
-                float a = Vector2.Dot(d, fwd), side = Mathf.Abs(d.x * fwd.y - d.y * fwd.x);
-                if (a < 0f || a > reach + BodyRadius(t) || side > BodyRadius(t) + 0.22f) continue;
-                if (a < along || target == null) { target = t; along = Mathf.Min(a, reach); }
+                float a = Vector2.Dot(d, fwd), side = Mathf.Abs(d.x * fwd.y - d.y * fwd.x), br = BodyRadius(t);
+                if (a < -br || a > reach + br || side > br + 0.12f) continue;
+                try { if (src.ObstacleToTarget(t.transform.position)) continue; } catch { }
+                float hitAt = Mathf.Max(0f, a - Mathf.Sqrt(Mathf.Max(0f, (br + 0.12f) * (br + 0.12f) - side * side)));   // where the line enters its body
+                if (target == null || hitAt < along) { target = t; along = Mathf.Min(hitAt, reach); }
             }
-            float len = target != null ? Mathf.Max(0.3f, along - BodyRadius(target) * 0.5f) : reach;
+            float len = target != null ? Mathf.Max(0.3f, along + 0.1f) : reach;
             float arrive = FV.Snap(ch, len);
             if (arrive > 0f) yield return new WaitForSeconds(arrive);
             HitContainers(ch, src, hand + fwd * len, 0.35f);
@@ -673,20 +703,47 @@ namespace FlagellantMod
     [HarmonyPatch(typeof(Controller), nameof(Controller.ChangeRandomAnimation))]
     internal static class RightHandOnlyPatch
     {
+        /// set while a whip skill (Poison Lash, Quick Snap) starts its animation: it is played with the LEFT hand
+        public static bool WhipHand;
+
         static bool Prefix(Controller __instance)
         {
             try
             {
                 var ch = FLogic.Hero(__instance);
-                if (ch == null || ch.ShieldWeapon != null) return true;
-                var co = Traverse.Create(__instance).Field("tempRandomAttack").GetValue<Coroutine>();
-                if (co != null) __instance.StopCoroutine(co);                     // a hand swap already under way is stopped
-                __instance.anim?.SetFloat("randomAttack", 0f);
-                Traverse.Create(__instance).Field("randPrev").SetValue(0);
+                if (ch == null) return true;
+                // the flails swap hands only with two flails; the whip in the left hand does not join the ordinary blows
+                if (!WhipHand && ch.ShieldWeapon != null && !Weapons.IsWhip(ch.ShieldWeapon)) return true;
+                Hand(__instance, WhipHand ? 1 : 0);
                 return false;
             }
             catch { return true; }
         }
+
+        public static void Hand(Controller c, int i)
+        {
+            var co = Traverse.Create(c).Field("tempRandomAttack").GetValue<Coroutine>();
+            if (co != null) c.StopCoroutine(co);                                  // a hand swap already under way is stopped
+            c.anim?.SetFloat("randomAttack", i);
+            Traverse.Create(c).Field("randPrev").SetValue(i);
+        }
+    }
+
+    /// the whip skills' animation is the left hand's
+    [HarmonyPatch(typeof(CharacterSkill), nameof(CharacterSkill.PlayAnimation))]
+    internal static class WhipHandPatch
+    {
+        static void Prefix(CharacterSkill __instance, Controller source)
+        {
+            try
+            {
+                if (!Flag.Active || FLogic.Hero(source) == null || !FlagSkills.IdOf.TryGetValue(__instance, out var id)) return;
+                RightHandOnlyPatch.WhipHand = id == "poisonLash" || id == "quickSnap";
+                RightHandOnlyPatch.Hand(source, RightHandOnlyPatch.WhipHand ? 1 : 0);
+            }
+            catch { }
+        }
+        static void Postfix() => RightHandOnlyPatch.WhipHand = false;
     }
 
     /// Religious Ecstasy from lvl 12: less damage taken the more health is missing

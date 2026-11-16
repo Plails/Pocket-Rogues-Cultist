@@ -51,7 +51,7 @@ Write-Host "zip: $zip ($count files)"
 
 # 4. commit, push, release
 & $git -C $repo add -A
-& $git -C $repo commit -m "Культист $Version" | Out-Host
+& $git -C $repo commit -m "Культист $Version" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" | Out-Host
 & $git -C $repo push origin HEAD | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "push failed" }
 if (-not $Notes) { $Notes = "Культист $Version. Скачай zip ниже и распакуй в папку игры с заменой файлов." }

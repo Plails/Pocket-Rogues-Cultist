@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -111,7 +111,7 @@ namespace FlagellantMod
 
         // the designers' tables: "dealt damage" at levels 1..25, whole numbers
         static readonly int[] T_Strike = { 80, 83, 86, 89, 92, 96, 99, 102, 105, 108, 111, 114, 118, 121, 124, 127, 130, 133, 136, 139, 142, 146, 149, 152, 155 };
-        static readonly int[] T_Sinner = { 150, 155, 160, 166, 171, 176, 181, 186, 192, 197, 202, 207, 213, 218, 223, 228, 233, 239, 244, 249, 254, 259, 265, 270, 275 };
+        static readonly int[] T_Sinner = Enumerable.Range(0, 25).Select(i => 80 + 3 * i).ToArray();          // 80 .. 152 (+3% a level, MRX)
         static readonly int[] T_Rain = { 100, 104, 108, 113, 117, 121, 125, 129, 133, 138, 142, 146, 150, 154, 158, 163, 167, 171, 175, 179, 183, 188, 192, 196, 200 };
         static readonly int[] T_Hammer = Enumerable.Range(0, 25).Select(i => 130 + 5 * i).ToArray();          // 130 .. 250
         public static readonly float[] T_HammerArmor = Enumerable.Range(0, 25).Select(i => i < 24 ? 25f + i : 50f).ToArray();   // 25 .. 48, 50
@@ -134,7 +134,8 @@ namespace FlagellantMod
 
         // other columns of the tables, levels 1..25 (used by the logic too, so the screen tells the truth)
         public static readonly float[] T_Martyr = { 1.00f, 1.04f, 1.08f, 1.12f, 1.17f, 1.21f, 1.25f, 1.29f, 1.33f, 1.38f, 1.42f, 1.46f, 1.50f, 1.54f, 1.58f, 1.62f, 1.67f, 1.71f, 1.75f, 1.79f, 1.83f, 1.88f, 1.92f, 1.96f, 2.00f };
-        public static readonly float[] T_WrathCost = { 2.5f, 2.4f, 2.4f, 2.3f, 2.2f, 2.2f, 2.1f, 2.1f, 2.0f, 1.9f, 1.9f, 1.8f, 1.8f, 1.7f, 1.6f, 1.6f, 1.5f, 1.4f, 1.4f, 1.3f, 1.2f, 1.2f, 1.1f, 1.1f, 1.0f };
+        // the other way round now (MRX): 1% at level 1, growing to 2.5% at 25 (1.1% at 2, ...)
+        public static readonly float[] T_WrathCost = Enumerable.Range(0, 25).Select(i => (float)Math.Round(1.0 + 1.5 * i / 24.0, 1, MidpointRounding.AwayFromZero)).ToArray();
         public static readonly float[] T_Ecstasy = { 1.00f, 1.06f, 1.12f, 1.19f, 1.25f, 1.31f, 1.38f, 1.44f, 1.50f, 1.56f, 1.63f, 1.69f, 1.75f, 1.81f, 1.88f, 1.94f, 2.00f, 2.06f, 2.12f, 2.19f, 2.25f, 2.31f, 2.38f, 2.44f, 2.50f };
         public static readonly float[] T_Resist = Enumerable.Range(1, 25).Select(i => 4f * i).ToArray();
 
@@ -340,12 +341,12 @@ namespace FlagellantMod
                     weakness != null ? Inj(Deb, 30f, 0f, 12, 50, debuff: weakness, time: 6f) : null,
                     Line("undead", 40f, 25, icon: dmgIco));
 
-            // Sinner's Strike: three blows with teleports, dealt 150..275 (blunt), armour -10/-15/-20, +15% crit vs heavy armour at 25
+            // Sinner's Strike: three blows with teleports (the same target may take several), dealt 80..152 (blunt), armour -10/-15/-20, +15% crit vs heavy armour at 25
             var s3 = Make(vamp, "sinnerStrike", SO_Skill.SkillType.SpeedAttack, Def(bers.skills_Speed, 2));
             s3.animationID = Lunge;
             foreach (var l in AllLvls(s3))
                 SetInj(l, bludge,
-                    MainTab(T_Sinner, 5), Line("hits", 3f, icon: dmgIco), NoLine(Inj(Range, 50f, 0f)), Inj(Repl, 100f, 0f, dmg: bludge),
+                    MainTab(T_Sinner, 3), Line("hits", 3f, icon: dmgIco), NoLine(Inj(Range, 50f, 0f)), Inj(Repl, 100f, 0f, dmg: bludge),
                     Tab(Inj(Armor, 10f, 0f), Steps(0, 10f, 12, 15f, 25, 20f)),
                     Line("heavyCrit", 15f, 25, icon: critIco));
 
@@ -367,7 +368,7 @@ namespace FlagellantMod
             // armour ignored 25..50%, stun 7% from 12, 15% at 25. Keeps Martyr's Hand's save key, so the levels stay.
             var x2 = Make(main, "penanceHammer", SO_Skill.SkillType.SpeedAttack, Def(bers.skills_Speed, 1), "martyrHand");
             x2.animationID = A;
-            x2.animationSpeedMod = main.animationSpeedMod / 1.4f;
+            x2.animationSpeedMod = main.animationSpeedMod / 1.8f;                 // slower altogether (MRX)
             foreach (var l in AllLvls(x2))
                 SetInj(l, bludge,
                     MainTab(T_Hammer, 5), NoLine(Inj(Range, 80f, 0f)), Inj(Repl, 100f, 0f, dmg: bludge),

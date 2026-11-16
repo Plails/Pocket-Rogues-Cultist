@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using HarmonyLib;
 using I2.Loc;
 
@@ -25,16 +25,16 @@ namespace FlagellantMod
                 "The Cultist strikes with a blood-coloured swing.\nDuration: instant."),
             [S + "poisonLash"] = ("Ядовитый хлёст", "Poison Lash"),
             [S + "poisonLash_dsc"] = (
-                "Культист совершает два взмаха: один справа налево, другой слева направо. Каждый удар наносит урон и заполняет шкалу отравления.\nДлительность: мгновенная.",
+                "Культист совершает хлыстом в левой руке два взмаха: один справа налево, другой слева направо. Каждый удар наносит урон и заполняет шкалу отравления.\nДлительность: мгновенная.",
                 "The Cultist makes two swings: right to left, then left to right. Each blow deals damage and fills the poison gauge.\nDuration: instant."),
             [S + "penanceHammer"] = ("Молот покаяния", "Hammer of Penance"),
             [S + "penanceHammer_dsc"] = (
-                "Самобичеватель раскручивает тяжёлый шипастый шар над головой и с размаху обрушивает его на землю перед собой.\nДлительность: увеличенная (примерно на 40% дольше обычной атаки, зарядка не требуется).",
-                "The Flagellant whirls a heavy spiked ball over his head and brings it crashing down on the ground in front of him.\nDuration: longer (about 40% longer than a normal attack, no charging needed)."),
+                "Культист заносит тяжёлый шипастый шар над головой и с размаху обрушивает его на землю перед собой.\nДлительность: увеличенная (примерно на 80% дольше обычной атаки, зарядка не требуется).",
+                "The Cultist raises a heavy spiked ball over his head and brings it crashing down on the ground in front of him.\nDuration: longer (about 80% longer than a normal attack, no charging needed)."),
             [S + "sinnerStrike"] = ("Удар Грешника", "Sinner's Strike"),
             [S + "sinnerStrike_dsc"] = (
-                "Культист совершает серию из трёх ударов, каждый из которых сильно отталкивает врагов и переносит его к следующей цели.\nДлительность: мгновенная.",
-                "The Cultist makes a series of three blows, each knocking enemies far back and carrying him to the next target.\nDuration: instant."),
+                "Культист совершает серию из трёх ударов, каждый из которых сильно отталкивает врагов и переносит его к следующей цели. Если других целей рядом нет, он бьёт ту же цель ещё раз.\nДлительность: мгновенная.",
+                "The Cultist makes a series of three blows, each knocking enemies far back and carrying him to the next target. With no other target near, he strikes the same one again.\nDuration: instant."),
 
             // ---- special ----
             [S + "bloodRain"] = ("Кровавый дождь", "Blood Rain"),
@@ -61,7 +61,7 @@ namespace FlagellantMod
                 "The Cultist lashes himself with the flail and falls into religious ecstasy, his body turns crimson. The less health he has, the stronger the frenzy."),
             [S + "quickSnap"] = ("Быстрый Щелчок", "Quick Snap"),
             [S + "quickSnap_dsc"] = (
-                "Культист делает молниеносный выпад плетью строго по прямой линии на большую дистанцию. Кончик хлыста наносит точечный удар по первой цели на пути.\nДлительность: мгновенная (ускоренная анимация).",
+                "Культист делает хлыстом в левой руке молниеносный выпад строго по прямой линии на большую дистанцию. Кончик хлыста наносит точечный удар по первой цели на пути.\nДлительность: мгновенная (ускоренная анимация).",
                 "The Cultist makes a lightning lunge with the lash in a dead straight line over a long distance. The tip of the whip strikes the first target on its way.\nDuration: instant (sped-up animation)."),
             ["FLG/Line/snapLine"] = ("Удар по прямой на большую дистанцию, по первой цели на пути", "Strikes in a straight line far ahead, the first target on the way"),
             ["FLG/Line/snapCrit"] = ("Удар на максимальной дистанции всегда критический", "A hit at the maximum distance is always critical"),
@@ -116,7 +116,7 @@ namespace FlagellantMod
             ["Items/Flagellant/rustyFlail"] = ("Ржавый кистень грешника", "Sinner's Rusty Flail"),
             ["Items/Flagellant/rustyFlail_dsc"] = ("Обычный кистень, покрытый ржавчиной и чужой кровью.", "An ordinary flail covered in rust and someone else's blood."),
             ["Items/Flagellant/ritualScourge"] = ("Обрядовая плеть", "Ritual Scourge"),
-            ["Items/Flagellant/ritualScourge_dsc"] = ("Многохвостый кожаный жгут для обрядов покаяния.", "A many-tailed leather scourge for rites of penance."),
+            ["Items/Flagellant/ritualScourge_dsc"] = ("Многохвостый кожаный жгут для обрядов покаяния. Держится в левой руке: им хлещут «Ядовитый хлёст» и «Быстрый щелчок».", "A many-tailed leather scourge for rites of penance. Held in the left hand: Poison Lash and Quick Snap are struck with it."),
             ["Items/Flagellant/inquisitorFlail"] = ("Цеп Инквизитора", "Inquisitor's Flail"),
             ["Items/Flagellant/inquisitorFlail_dsc"] = ("Тяжёлое кадило на толстой звеньевой привязи.", "A heavy censer on a thick chain."),
             ["Items/Flagellant/devastator"] = ("Опустошитель", "Devastator"),

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace FlagellantMod
 {
@@ -24,15 +24,32 @@ namespace FlagellantMod
         {
             try
             {
-                var n = ch != null && ch.Weapon != null ? ch.Weapon.Name : null;
-                if (n != null && n.StartsWith("Flg_"))
-                {
-                    var id = n.Substring(4);
-                    if (Art.Get("whip", id + "_seg", 42f) != null) return id;                // every Cultist flail has its own lash
-                }
+                // the whip is in his LEFT hand (MRX): the Ritual Scourge there gives its many tails; else a plain leather whip
+                var n = ch != null && ch.ShieldWeapon != null ? ch.ShieldWeapon.Name : null;
+                if (n != null && Weapons.IsWhip(ch.ShieldWeapon) && Art.Get("whip", n.Substring(4) + "_seg", 42f) != null) return n.Substring(4);
             }
             catch { }
             return "leather";
+        }
+
+        /// the look of the flail in his RIGHT hand (the Hammer of Penance swings that one)
+        public static string FlailStyle(Character ch)
+        {
+            try
+            {
+                var n = ch != null && ch.Weapon != null ? ch.Weapon.Name : null;
+                if (n != null && n.StartsWith("Flg_") && Art.Get("whip", n.Substring(4) + "_seg", 42f) != null) return n.Substring(4);
+            }
+            catch { }
+            return "leather";
+        }
+
+        /// the hand that holds the whip (the left one), where the lash comes out
+        public static Vector2 WhipHand(Character ch)
+        {
+            Vector2 hand = (Vector2)ch.transform.position + (Vector2)ch.transform.right * 0.15f;
+            try { if (ch.LeftHandSprite != null) hand = ch.LeftHandSprite.transform.position; } catch { }
+            return hand;
         }
 
         /// ONE whip for both blows: it shoots out of the hand with the attack, cracks forward, then lashes back;
@@ -105,7 +122,7 @@ namespace FlagellantMod
                 if (seg == null || hero == null) { Destroy(gameObject); return; }
                 try { heroSr = hero.heroSprite; } catch { }
                 // the flail in his hand turns into the lash: it is hidden while the lash is out
-                try { held = hero.RightHandSprite; if (held != null && style != "leather") { hiding++; held.enabled = false; } else held = null; } catch { held = null; }
+                try { held = hero.LeftHandSprite; if (held != null && style != "leather") { hiding++; held.enabled = false; } else held = null; } catch { held = null; }
                 int tails = kind.tails;
                 for (int l = 0; l < tails; l++)
                 {
@@ -170,8 +187,7 @@ namespace FlagellantMod
                 t += Time.deltaTime;
                 float facing = Mathf.Atan2(hero.transform.right.y, hero.transform.right.x) * Mathf.Rad2Deg;
                 // it comes out of the hand that holds the weapon (and follows it through the attack animation)
-                Vector2 hand = (Vector2)hero.transform.position + (Vector2)hero.transform.right * 0.15f;
-                try { if (hero.RightHandSprite != null) hand = hero.RightHandSprite.transform.position; } catch { }
+                Vector2 hand = WhipHand(hero);                                                  // the left hand, as it moves
                 // the line of his arm (from his body to the fist): the lash starts as a continuation of the arm and only
                 // further out bends into the swing (the user: "кнут должен быть как продолжение руки")
                 Vector2 arm = hand - (Vector2)hero.transform.position;
@@ -292,12 +308,12 @@ namespace FlagellantMod
 
         // ---------------- Hammer of Penance: the spiked ball on its chain goes round over his head (from behind him),
         // then comes down in front of him; cracks in the ground, dust and stone chips where it lands
-        public const float HammerSpin = 0.13f / 0.25f, HammerFall = 0.07f / 0.25f; // 25% of the first speed (the user/MRX); the hit waits for it
+        public const float HammerSpin = 0.62f, HammerFall = 0.34f;          // raised (no whirl, MRX), then down - slower than before; the hit waits for it
         /// the head and the chain of the hammer follow the flail in his hand (the same pieces as his lash);
         /// without one of the Cultist's flails it is a plain spiked mace on an iron chain
         static (Sprite head, Sprite link, float headScale) HammerLook(Character ch)
         {
-            var style = WhipStyle(ch);
+            var style = FlailStyle(ch);
             if (style != "leather")
             {
                 var head = Art.Get("whip", style + "_tip", 42f);
@@ -338,16 +354,18 @@ namespace FlagellantMod
                 Vector2 p; float s;
                 if (t < HammerSpin)
                 {
-                    // one wide turn round his fist on the full chain: from behind him, past his right side, over to the front
-                    float k = t / HammerSpin;
-                    lastA = face + 180f - 360f * (k * k * (3f - 2f * k));
-                    p = hand + Dir(lastA) * ChainLen; s = 1.2f;
+                    // he lifts it over his head (seen from above: back over his shoulder, a little bigger as it rises),
+                    // holds it there a moment - no whirl of the chain
+                    float k = Mathf.Clamp01(t / (HammerSpin * 0.75f));
+                    k = k * k * (3f - 2f * k);
+                    lastA = face + 180f - 25f * (1f - k);
+                    p = hand + Dir(lastA) * (ChainLen * (0.35f + 0.65f * k)); s = Mathf.Lerp(1f, 1.35f, k);
                 }
                 else
                 {
                     // and down on the ground in front of him (a little smaller as it falls from above)
                     float k = Mathf.Clamp01((t - HammerSpin) / HammerFall);
-                    p = Vector2.Lerp(hand + Dir(lastA) * ChainLen, target, k * k); s = Mathf.Lerp(1.2f, 1f, k);
+                    p = Vector2.Lerp(hand + Dir(lastA) * ChainLen, target, k * k); s = Mathf.Lerp(1.35f, 1f, k);
                 }
                 ball.transform.position = new Vector3(p.x, p.y, 0f);
                 ball.transform.localScale = Vector3.one * headScale * s;
@@ -495,7 +513,7 @@ namespace FlagellantMod
                 var tp = Art.Get("whip", style + "_tip", 42f);
                 if (seg == null || hero == null) { Destroy(gameObject); return; }
                 try { heroSr = hero.heroSprite; } catch { }
-                try { held = hero.RightHandSprite; if (held != null && held.enabled && style != "leather") held.enabled = false; else held = null; } catch { held = null; }
+                try { held = hero.LeftHandSprite; if (held != null && held.enabled && style != "leather") held.enabled = false; else held = null; } catch { held = null; }
                 face = Mathf.Atan2(hero.transform.right.y, hero.transform.right.x) * Mathf.Rad2Deg;   // strictly straight: the line is fixed
                 int n = Mathf.Clamp(Mathf.RoundToInt(len * 42f / Mathf.Max(2f, seg.rect.width - 2f)), 4, 48);
                 segs = new SpriteRenderer[n];
@@ -511,8 +529,7 @@ namespace FlagellantMod
             {
                 if (hero == null || segs == null) { Destroy(gameObject); return; }
                 t += Time.deltaTime;
-                Vector2 hand = hero.transform.position;
-                try { if (hero.RightHandSprite != null) hand = hero.RightHandSprite.transform.position; } catch { }
+                Vector2 hand = WhipHand(hero);                                                  // the left hand, as it moves
                 float L = t < SnapOut ? Mathf.Lerp(0.15f, len, EaseOut(t / SnapOut))
                     : t < SnapOut + SnapHold ? len
                     : len * (1f - 0.95f * EaseOut((t - SnapOut - SnapHold) / SnapBack));

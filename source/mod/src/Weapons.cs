@@ -12,7 +12,10 @@ namespace FlagellantMod
     /// loot), so only he finds them. Saved items point to "Items/Weapons/Flagellant/..." which is answered here.
     internal static class Weapons
     {
-        public static SO_ItemWeapon[] Flails = new SO_ItemWeapon[0];
+        public static SO_ItemWeapon[] Flails = new SO_ItemWeapon[0], Retired = new SO_ItemWeapon[0];
+
+        /// the whips: left-hand things (the Ritual Scourge)
+        public static bool IsWhip(SO_Item item) => item != null && item.Name == "Flg_ritualScourge";
         public static ItemEffectWeapon Inquisition;
         public const string PathPrefix = "Items/Weapons/Flagellant/";
         public const string InquisitionPath = "Effects/Flagellant/Inquisition";
@@ -60,9 +63,13 @@ namespace FlagellantMod
                 Make(W("Bers3AxeBattleDouble"), "penitentChain", 5.5f, 8.5f, 3, -2f, WeaponGrip.OneHanded, 800, bleed),
                 Make(W("Bers5AxeBlack"), "inquisitorFlail", 7f, 11.5f, 2, -4f, WeaponGrip.OneHanded, 1100, Inquisition),
                 Make(W("Bers5.5Axe"), "thornStar", 9f, 14f, 4, -3f, WeaponGrip.OneHanded, 1400, bleed),
+                Make(W("Bers8AxeGiant"), "devastator", 18.5f, 24f, 5, -3.5f, WeaponGrip.OneHanded, 2200, stun),
+            };
+            // gone from the game (MRX): no longer in the shop, the forge or the loot; a saved one still loads (so no run breaks)
+            Retired = new[]
+            {
                 Make(W("Bers6AxeRune"), "martyrChain", 12f, 17f, 5, -2.5f, WeaponGrip.OneHanded, 1700, Inquisition),
                 Make(W("Bers7Axe"), "doomBell", 15f, 21f, 3, -4f, WeaponGrip.OneHanded, 1950, stun),
-                Make(W("Bers8AxeGiant"), "devastator", 18.5f, 24f, 5, -3.5f, WeaponGrip.OneHanded, 2200, stun),
             };
             FlagellantPlugin.Log.LogInfo("Flails ready: " + string.Join(", ", Flails.Select(f => f.name + " " + f._damageMin + "-" + f._damageMax + " " + f.gripType)));
             GrantBlueprints();
@@ -82,6 +89,19 @@ namespace FlagellantMod
             FlagellantPlugin.Log.LogInfo("Flail blueprints opened in the shop: " + (got.Count > 0 ? string.Join(", ", got) : "already open"));
         }
 
+        /// where the fist holds it: near the end of the handle (pixels from the picture's bottom left)
+        static Vector2 EquipPivot(string id)
+        {
+            var path = Path.Combine(FlagellantPlugin.Dir, "weapons", id + "_equip.png");
+            try
+            {
+                var meta = path.Replace(".png", ".grip");
+                if (File.Exists(meta)) { var p = File.ReadAllText(meta).Split(','); return new Vector2(float.Parse(p[0], System.Globalization.CultureInfo.InvariantCulture), float.Parse(p[1], System.Globalization.CultureInfo.InvariantCulture)); }
+            }
+            catch { }
+            return new Vector2(16f, 16f);
+        }
+
         static SO_ItemWeapon Make(SO_ItemWeapon src, string id, float min, float max, int crit, float spd, WeaponGrip grip, int price, ItemEffectWeapon effect)
         {
             var w = UnityEngine.Object.Instantiate(src);
@@ -94,7 +114,7 @@ namespace FlagellantMod
             w.TitleEN = t.en ?? id;
             var icon = Load(id + "_icon", 48f, new Vector2(12f, 12f));
             if (icon != null) w.Icon = icon;
-            var eq = Load(id + "_equip", 42f, new Vector2(16f, 16f));
+            var eq = Load(id + "_equip", 42f, EquipPivot(id));
             if (eq != null) w.EquipSprite = eq;
             w._damageMin = min; w._damageMax = max;
             w.damageTypeMain = c.DamageTypes.Phys_bludge;
@@ -121,7 +141,7 @@ namespace FlagellantMod
         {
             if (string.IsNullOrEmpty(path)) return null;
             if (path == InquisitionPath || path.EndsWith("/Inquisition") && path.Contains("Flagellant")) return Inquisition;
-            foreach (var f in Flails)
+            foreach (var f in Flails.Concat(Retired))
                 if (f != null && (path == f.savingObjectPath || path == f.name)) return f;
             return null;
         }
@@ -169,7 +189,7 @@ namespace FlagellantMod
         public static void Ensure(Character ch)
         {
             if (!Flag.Active || ch == null || ch.charClass != CharacterClasses.BERSERKER || Flails.Length == 0) return;
-            if (IsFlail(ch.Weapon)) return;
+            if (IsFlail(ch.Weapon) && !IsWhip(ch.Weapon)) return;
             try
             {
                 var w = SO_ItemWeapon.Copy(Flails[0], null);
@@ -211,6 +231,36 @@ namespace FlagellantMod
                 if (k > 1.0001f) damageStruct = damageStruct * k;
             }
             catch { }
+        }
+    }
+
+    [HarmonyPatch(typeof(Character), nameof(Character.EquipItem))]
+    internal static class WhipLeftHandPatch
+    {
+        static bool busy;
+        static void Postfix(Character __instance, SO_ItemEquip item)
+        {
+            if (busy) return;
+            try
+            {
+                var ch = __instance;
+                if (ch == null || !(ch.ctrl is PlayerController) || ch.charClass != CharacterClasses.BERSERKER || !Flag.Active) return;
+                if (!Weapons.IsWhip(ch.Weapon)) return;
+                busy = true;
+                var whip = ch.Weapon;
+                if (ch.ShieldTemp == null) { ch.ShieldTemp = ScriptableObject.CreateInstance<SO_ItemShield>(); ch.ShieldTemp.EquipSlot = EquipmentSlots.Arrows; }
+                else ch.ShieldTemp.defaultSkill = null;
+                var other = ch.ShieldWeapon;
+                ch.ShieldTemp.Init(whip);
+                ch.Shield = ch.ShieldTemp;
+                ch.ShieldWeapon = whip;
+                ch.Weapon = other != null && !Weapons.IsWhip(other) ? other : null;      // the flail that was in the left hand goes to the right
+                try { ch.RightHandSprite.sprite = ch.Weapon != null ? ch.Weapon.EquipSprite : null; ch.RightHandSprite.flipX = false; } catch { }
+                try { ch.LeftHandSprite.sprite = whip.EquipSprite; ch.LeftHandSprite.flipX = true; } catch { }
+                FlagellantPlugin.Log.LogInfo("Ritual Scourge: into the left hand" + (ch.Weapon != null ? ", " + ch.Weapon.Name + " into the right" : ""));
+            }
+            catch (System.Exception e) { FlagellantPlugin.Log.LogWarning("Whip to the left hand: " + e.Message); }
+            finally { busy = false; }
         }
     }
 
