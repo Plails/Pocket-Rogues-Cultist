@@ -368,7 +368,7 @@ namespace FlagellantMod
             // armour ignored 25..50%, stun 7% from 12, 15% at 25. Keeps Martyr's Hand's save key, so the levels stay.
             var x2 = Make(main, "penanceHammer", SO_Skill.SkillType.SpeedAttack, Def(bers.skills_Speed, 1), "martyrHand");
             x2.animationID = A;
-            x2.animationSpeedMod = main.animationSpeedMod / 1.8f;                 // slower altogether (MRX)
+            x2.animationSpeedMod = main.animationSpeedMod / 1.4f;                 // the 2.4 speed again (the user)
             foreach (var l in AllLvls(x2))
                 SetInj(l, bludge,
                     MainTab(T_Hammer, 5), NoLine(Inj(Range, 80f, 0f)), Inj(Repl, 100f, 0f, dmg: bludge),
