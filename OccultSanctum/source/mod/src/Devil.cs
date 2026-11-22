@@ -86,7 +86,7 @@ namespace OccultSanctum
             catch { }
             try { mob.creatureLocalizedName = "Sanctum/Devil"; } catch { }
             mob.creatureID = Bestiary.DevilId;
-            mob.customPreviewSprite = Art.Pivoted("devil_preview", new Vector2(0.5f, 0.5f), 36f);
+            mob.customPreviewSprite = Snapshot.Of(go, mob.creatureID, Art.Pivoted("devil_preview", new Vector2(0.5f, 0.5f), 36f));   // taken from himself (the user: the hand-made ones were crooked)
         }
     }
 

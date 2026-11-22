@@ -21,6 +21,8 @@ namespace OccultSanctum
             return donor;
         }
 
+        public static Mob DonorMob() => Donor();
+
         public static void Apply(Mob m)
         {
             var d = Donor();

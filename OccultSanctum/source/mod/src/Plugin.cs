@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace OccultSanctum
 {
-    [BepInPlugin("custom.pocketrogues.occultsanctum", "Occult Sanctum - a cultist sub-location of the Void Crypt", "0.26.1")]
+    [BepInPlugin("custom.pocketrogues.occultsanctum", "Occult Sanctum - a cultist sub-location of the Void Crypt", "0.37.1")]
     public class SanctumPlugin : BaseUnityPlugin
     {
         public static ManualLogSource Log;
@@ -53,6 +53,28 @@ namespace OccultSanctum
             Vector2 piv = like != null && like.rect.width > 0 ? new Vector2(like.pivot.x / like.rect.width, like.pivot.y / like.rect.height) : new Vector2(0.5f, 0.5f);
             float ppu = like != null ? like.pixelsPerUnit : ppuIfNone;
             s = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), piv, ppu, 0, SpriteMeshType.FullRect);
+            s.hideFlags = HideFlags.HideAndDontSave;
+            s.name = "OS_" + name;
+            cache[key] = s;
+            return s;
+        }
+
+        /// our picture drawn at twice the size of a part of the game's rig (with an even margin round it, if wider):
+        /// it stands just where the rig's part stood, with twice its pixels
+        public static Sprite Part2x(string name, Sprite like) => PartK(name, like, 2f);
+
+        /// our picture drawn at k times the size of a part of the game's rig (an even margin round it, if wider)
+        public static Sprite PartK(string name, Sprite like, float k)
+        {
+            if (like == null || like.rect.width <= 0) return null;
+            string key = name + "#" + k + "x" + like.pivot + like.rect.size + like.pixelsPerUnit;
+            if (cache.TryGetValue(key, out var s) && s != null) return s;
+            var src = Get(name);
+            if (src == null) return null;
+            var tex = src.texture;
+            float mx = (tex.width - k * like.rect.width) / 2f, my = (tex.height - k * like.rect.height) / 2f;
+            var piv = new Vector2((like.pivot.x * k + mx) / tex.width, (like.pivot.y * k + my) / tex.height);
+            s = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), piv, like.pixelsPerUnit * k, 0, SpriteMeshType.FullRect);
             s.hideFlags = HideFlags.HideAndDontSave;
             s.name = "OS_" + name;
             cache[key] = s;
@@ -137,8 +159,10 @@ namespace OccultSanctum
                 case "Sanctum/Devil": return ru ? "Крылатый чёрт" : "Winged devil";
                 case "Sanctum/Spearman": return ru ? "Копейщик культа" : "Cult spearman";
                 case "Bestiary/MobsDescriptions/dscr_OccultSpearman": return ru ? "Воин культа в таком же сером капюшоне и с красным кушаком, но с длинным копьём, перевязанным красной тканью. Колет издалека, не подпуская к себе." : "A cult warrior in the same grey hood and red sash, but with a long spear tied with red cloth under its point. He thrusts from afar and keeps you at the spear's length.";
-                case "Sanctum/Champion": return ru ? "Чемпион культа" : "Cult champion";
-                case "Bestiary/MobsDescriptions/dscr_OccultChampion": return ru ? "Генерал культа: огромный воин в чёрной рясе с серой нашивкой, в шипастых наплечниках, с огромной двуручной шипастой булавой. Обходит всё святилище в сопровождении двух солдат. Очень живуч." : "The cult's general: a huge warrior in a black robe with a grey tabard and spiked pauldrons, wielding a huge two-handed spiked mace. He goes the rounds of the whole sanctum with two soldiers behind him. Very hard to kill.";
+                case "Sanctum/Champion": return ru ? "Генерал культа" : "Cult general";
+                case "Bestiary/MobsDescriptions/dscr_OccultChampion": return ru ? "Генерал культа: огромный воин в чёрной рясе с серой нашивкой, в шипастых наплечниках, с огромной двуручной шипастой булавой. Обходит всё святилище в сопровождении двух солдат. В бою вскидывает булаву и боевым кличем приводит союзников в ярость на 10 секунд. Очень живуч." : "The cult's general: a huge warrior in a black robe with a grey tabard and spiked pauldrons, wielding a huge two-handed spiked mace. He goes the rounds of the whole sanctum with two soldiers behind him. In a fight he raises his mace and his war cry sends his friends into a rage for 10 seconds. Very hard to kill.";
+                case "Sanctum/Magus": return ru ? "Архимаг культа" : "Cult archmage";
+                case "Bestiary/MobsDescriptions/dscr_OccultMagus": return ru ? "Второй чемпион культа, элитный маг: огромный, в чёрной рясе с красной каймой, в наплечниках из черепов, с золотой цепью и кровавым камнем на груди, в капюшоне с золотым венцом и костяными рогами, из-под которого горят красные глаза. Мечет такие же проклятые сферы, как культисты, только огромные. Обходит святилище с двумя культистами." : "The cult's second champion, an elite magus: huge, in a black robe hemmed with red, skull pauldrons, a gold chain with a blood gem on his chest, a hood crowned with gold and bone horns, red eyes burning under it. Hurls the cultists' cursed spheres, only huge. Goes the rounds of the sanctum with two cultists.";
                 case "Sanctum/Elder": return ru ? "Верховный культист" : "Cult elder";
                 case "Bestiary/MobsDescriptions/dscr_OccultElder": return ru ? "Глава культа: рослый, в чёрном капюшоне и рясе с золотой каймой, с огромным посохом, увенчанным рогатым черепом. Мечет проклятые сферы по три разом. Ходит по святилищу со свитой и смотрит, чем заняты остальные." : "The cult's head: tall, in a black hood and robe edged with gold, with a great staff crowned by a horned skull. Hurls cursed spheres three at a time. He goes about the sanctum with his retinue, seeing what the others are doing.";
                 case "Sanctum/Crossbowman": return ru ? "Арбалетчик культа" : "Cult crossbowman";

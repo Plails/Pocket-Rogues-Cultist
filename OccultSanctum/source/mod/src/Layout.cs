@@ -132,15 +132,27 @@ namespace OccultSanctum
 
         public static int Count => Makers.Length;
 
+        /// the halls with straight, even walls (no nubs, steps or niches - the user: corridors and walls even)
+        static readonly Func<Layout>[] Plain =
+        {
+            () => Hall("Большой зал", Odd(13, 19), Odd(13, 19)),
+            () => Hall("Неф", 13, N(19, 25)),
+            () => Hall("Широкий зал", Odd(19, 25), N(11, 13)),
+            () => new Layout { Name = "Крест", W = 19, H = 21, Rects = { R(6, 0, 7, 21), R(0, 7, 19, 7) }, Entry = R(6, 0, 7, 7), GateX = 9, Circle = new Vector2(9, 10) },
+            () => new Layout { Name = "Колоннада", W = 17, H = 19, Rects = { R(0, 0, 17, 19) }, Holes = { R(3, 4, 2, 2), R(12, 4, 2, 2), R(3, 9, 2, 2), R(12, 9, 2, 2), R(3, 14, 2, 2), R(12, 14, 2, 2) }, Entry = R(0, 0, 17, 19), GateX = 8, Circle = new Vector2(8, 10) },
+            () => new Layout { Name = "Зал четырёх столпов", W = 17, H = 17, Rects = { R(0, 0, 17, 17) }, Holes = { R(3, 3, 2, 2), R(12, 3, 2, 2), R(3, 12, 2, 2), R(12, 12, 2, 2) }, Entry = R(0, 0, 17, 17), GateX = 8, Circle = new Vector2(8, 8) },
+            () => new Layout { Name = "Т-образный зал", W = 21, H = 19, Rects = { R(7, 0, 7, 12), R(0, 12, 21, 7) }, Entry = R(7, 0, 7, 12), GateX = 10, Circle = new Vector2(10, 15) },
+        };
+
         public static Layout Pick(System.Random rnd)
         {
             Rn = rnd;
             for (int tries = 0; tries < 20; tries++)
             {
                 // most visits: a complex of rooms and corridors; else one of the great halls
-                var l = (rnd.Next(100) < 60 ? Complex() : Makers[rnd.Next(Makers.Length)]()).Done();
+                var l = (rnd.Next(100) < 90 ? Complex() : Plain[rnd.Next(Plain.Length)]()).Done();
                 if (!l.Floor(l.GateX, 0) || !l.Connected()) { Debug.LogWarning("Sanctum layout " + l.Name + " is not whole, another one"); continue; }
-                if (rnd.Next(2) == 1) l = l.Mirror();
+                if (!l.Name.StartsWith("Комплекс") && rnd.Next(2) == 1) l = l.Mirror();
                 return l.WithEntrance(rnd);
             }
             return Hall("Большой зал", 15, 15).Done().WithEntrance(rnd);
@@ -164,7 +176,7 @@ namespace OccultSanctum
             bool Free(RectInt r) { if (r.xMin < 1 || r.yMin < 0 || r.xMax > W - 1 || r.yMax > H - 1) return false; for (int x = r.xMin; x < r.xMax; x++) for (int y = r.yMin; y < r.yMax; y++) if (taken[x, y]) return false; return true; }
             foreach (var r in l.Rects) Take(r, 1);
             var anchors = new List<RectInt> { entry, hall, hall };
-            int want = N(5, 8);
+            int want = N(6, 10);
             for (int tries = 0; tries < 200 && l.Side.Count < want; tries++)
             {
                 var a = anchors[Rn.Next(anchors.Count)];
@@ -177,9 +189,9 @@ namespace OccultSanctum
                 if (s == 'w' || s == 'e')
                 {
                     if (a.height - 2 < cw) continue;
-                    int cy = N(a.yMin + 1, a.yMax - 1 - cw);
+                    int cy = Rn.Next(2) == 0 ? a.yMin + (a.height - cw) / 2 : N(a.yMin + 1, a.yMax - 1 - cw);   // (mostly into the middle of the wall)
                     cor = s == 'w' ? R(a.xMin - len, cy, len, cw) : R(a.xMax, cy, len, cw);
-                    int ry = cy - N(0, rh - cw);
+                    int ry = cy - (rh - cw) / 2;                                              // the corridor comes into the middle of the wall
                     room = s == 'w' ? R(cor.xMin - rw, ry, rw, rh) : R(cor.xMax, ry, rw, rh);
                 }
                 else
@@ -187,7 +199,7 @@ namespace OccultSanctum
                     if (a.width - 2 < cw) continue;
                     int cx = N(a.xMin + 1, a.xMax - 1 - cw);
                     if (Mathf.Abs(cx - gx) <= 2 || Mathf.Abs(cx + cw - 1 - gx) <= 2) continue;   // nothing straight north of the altar or south into the way in
-                    int rx = cx - N(0, rw - cw);
+                    int rx = cx - (rw - cw) / 2;
                     if (s == 'n') { cor = R(cx, a.yMax, cw, len); room = R(rx, cor.yMax, rw, rh); }
                     else { cor = R(cx, a.yMin - len, cw, len); room = R(rx, cor.yMin - rh, rw, rh); }
                 }
@@ -197,9 +209,20 @@ namespace OccultSanctum
                 if (s == 'e') corSides = R(cor.xMin + 1, cor.yMin - 1, cor.width - 1, cor.height + 2);
                 var roomPad = R(room.xMin - 1, room.yMin - 1, room.width + 2, room.height + 2);
                 if (!Free(roomPad) || (corSides.width > 0 && corSides.height > 0 && !Free(corSides))) continue;
+                // (a friend of the user: "nonsense, not generation") the plan is symmetric like a temple's: each side room
+                // has its twin mirrored across the hall's axis, or it is not built
+                RectInt M(RectInt r) => R(2 * gx - (r.xMax - 1), r.yMin, r.width, r.height);
+                bool alone = room.xMin <= gx && room.xMax - 1 >= gx;                       // (a room on the axis is its own twin)
+                RectInt mc = M(cor), mr = M(room), mSides = M(corSides), mPad = M(roomPad);
+                if (!alone)
+                {
+                    var corPad = R(cor.xMin - 1, cor.yMin - 1, cor.width + 2, cor.height + 2);
+                    if (mPad.Overlaps(roomPad) || mPad.Overlaps(corPad) || mc.Overlaps(roomPad) || mc.Overlaps(corPad) || !Free(mPad) || (mSides.width > 0 && mSides.height > 0 && !Free(mSides))) continue;
+                }
                 l.Rects.Add(cor); l.Rects.Add(room); l.Side.Add(room);
                 Take(room, 1); Take(cor, 1);
                 anchors.Add(room);
+                if (!alone) { l.Rects.Add(mc); l.Rects.Add(mr); l.Side.Add(mr); Take(mr, 1); Take(mc, 1); anchors.Add(mr); }
             }
             // loops: now and then a second corridor joins two side rooms that face each other across the rock
             int loops = 0;
@@ -212,18 +235,24 @@ namespace OccultSanctum
                     if (gap >= 3 && gap <= 12 && y1 - y0 >= 2)
                     {
                         var cor = R(a.xMax, N(y0, y1 - 2), gap, 2);
-                        if (Free(R(cor.xMin + 1, cor.yMin - 1, gap - 2, 4))) { l.Rects.Add(cor); Take(cor, 1); loops++; continue; }
+                        var mcor = R(2 * gx - (cor.xMax - 1), cor.yMin, cor.width, cor.height);
+                        bool self = mcor.Equals(cor);
+                        if (Free(R(cor.xMin + 1, cor.yMin - 1, gap - 2, 4)) && (self || Free(R(mcor.xMin + 1, mcor.yMin - 1, gap - 2, 4))))
+                        { l.Rects.Add(cor); Take(cor, 1); if (!self) { l.Rects.Add(mcor); Take(mcor, 1); } loops++; continue; }
                     }
                     int x0 = Mathf.Max(a.xMin + 1, b.xMin + 1), x1 = Mathf.Min(a.xMax - 1, b.xMax - 1), vgap = b.yMin - a.yMax;
                     if (vgap >= 3 && vgap <= 12 && x1 - x0 >= 2)
                     {
                         var cor = R(N(x0, x1 - 2), a.yMax, 2, vgap);
-                        if (Free(R(cor.xMin - 1, cor.yMin + 1, 4, vgap - 2))) { l.Rects.Add(cor); Take(cor, 1); loops++; }
+                        var mcor = R(2 * gx - (cor.xMax - 1), cor.yMin, cor.width, cor.height);
+                        bool self = mcor.Overlaps(cor);
+                        if (!self && Free(R(cor.xMin - 1, cor.yMin + 1, 4, vgap - 2)) && Free(R(mcor.xMin - 1, mcor.yMin + 1, 4, vgap - 2)))
+                        { l.Rects.Add(cor); Take(cor, 1); l.Rects.Add(mcor); Take(mcor, 1); loops++; }
                     }
                 }
             // the big rooms get pillars standing in them
             foreach (var r in l.Side)
-                if (r.width >= 8 && r.height >= 7 && Rn.Next(2) == 0)
+                if (r.width >= 8 && r.height >= 7 && ((Mathf.Min(r.xMin, 2 * gx - (r.xMax - 1)) * 31 + r.yMin * 7 + r.width) & 1) == 0)
                     foreach (var (px, py) in new[] { (r.xMin + 2, r.yMin + 2), (r.xMax - 3, r.yMin + 2), (r.xMin + 2, r.yMax - 3), (r.xMax - 3, r.yMax - 3) })
                         l.Holes.Add(R(px, py, 1, 1));
             l.Name += " (" + l.Side.Count + " комнат" + (loops > 0 ? ", " + loops + " кольц." : "") + ")";

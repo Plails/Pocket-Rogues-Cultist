@@ -175,7 +175,7 @@ namespace OccultSanctum
             }
             catch (Exception e) { SanctumPlugin.Log.LogWarning("Sanctum secret torch: " + e.Message); }
             // a red runner from the way in to the far wall (in the treasury, the shrine and the ossuary)
-            if (What == Kind.Treasury || What == Kind.Shrine || What == Kind.Ossuary || What == Kind.Reliquary || What == Kind.HeroTomb)
+            if (false)                                                   // (the user: no carpets anywhere)
                 for (int v = 0; v < far - 1; v++)
                 {
                     var c = Builder.Sr(v == 0 || v == far - 2 ? "occ_carpet_end" : "occ_carpet", T(mid, v), Builder.floorLayer, Builder.floorOrder + 2, floorMat);

@@ -116,13 +116,15 @@ namespace FlagellantMod
             return res;
         }
 
+        public static int BoxesHit;
         public static void HitContainers(Character ch, Controller src, Vector2 at, float r)
         {
+            BoxesHit = 0;
             foreach (var col in Physics2D.OverlapCircleAll(at, r, Mask(ch) | WallMask(src)))
             {
                 if (col == null) continue;
                 if (col.TryGetComponent<Container>(out var box))
-                    try { if (!src.ObstacleToTarget(col.transform.position, checkDestroyable: false)) box.SetDamage(ch.attackDamageContainers); } catch { }
+                    try { if (!src.ObstacleToTarget(col.transform.position, checkDestroyable: false)) { box.SetDamage(ch.attackDamageContainers); BoxesHit++; } } catch { }
                 else if (col.TryGetComponent<DestroyableWall>(out var wall))
                     // a breakable wall: the game's own hit on it (it takes a hit only from close by, like any attack)
                     try { if (!src.ObstacleToTarget(col.transform.TransformPoint(col.offset.x, col.offset.y, 0f), checkDestroyable: false)) wall.SetDamage(1f, ch.transform.position); } catch { }
@@ -337,11 +339,14 @@ namespace FlagellantMod
                 float at = k == 0 ? snaps.x : snaps.y;
                 if (at > waited) { yield return new WaitForSeconds(at - waited); waited = at; }
                 if (ch == null || !ch.alive) yield break;
-                foreach (var t in WhipTargets(ch, src, whip))
+                var hitNow = WhipTargets(ch, src, whip);
+                foreach (var t in hitNow)
                 {
                     bool undead = t is Mob mu && mu.mobClass == Mob.MobClassess.undead;
                     Strike(ch, src, sl, lvl, dmg, t, l >= 25 && undead ? 1.4f : 1f);
                 }
+                if (hitNow.Count > 0 || BoxesHit > 0)                                     // the tip struck someone or something
+                    FV.WhipImpact(hitNow.Count > 0 ? (Vector2)hitNow[0].transform.position : (Vector2)ch.transform.position + (Vector2)ch.transform.right * whip);
             }
         }
         /// three blows: each knocks the target far back and carries the hero to the next target

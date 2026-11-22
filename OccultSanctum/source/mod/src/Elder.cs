@@ -13,7 +13,6 @@ namespace OccultSanctum
     public static class Elder
     {
         public const string Id = "OccultElder";
-        public const float Size = 0.85f;                  // the ogre shaman's frame made a man's size (a little bigger than the crossbowman)
         static GameObject prefab;
         static bool looked;
 
@@ -44,7 +43,7 @@ namespace OccultSanctum
             mob.lvl = Mathf.Max(1, Generation.GetRandomMobLvl() + 1);
             mob.Init();
             Dress(go, mob);
-            go.transform.localScale = go.transform.localScale * Size;
+            Sizer.Fit(go, Sizer.Elder);
             var ai = go.GetComponent<AIController>();
             if (ai != null) try { GameManager.Instance.AddMob(ai); } catch { }
             SanctumPlugin.Log.LogInfo("Sanctum: the elder stands at " + pos);
@@ -84,7 +83,7 @@ namespace OccultSanctum
             // his head (the hood) sits on his shoulders like a man's - not out in front like the ogre's big head
             if (headSr != null)
             {
-                var hd = Art.Pivoted("elder_head", new Vector2(0.5f, 0.5f), PartPpu);
+                var hd = Art.Pivoted("elder_head_small", new Vector2(0.5f, 0.5f), PartPpu);   // a little smaller (the user; elder_head_small.py)
                 if (body != null && hd != null)
                 {
                     var hood = new GameObject("Hood");
@@ -99,14 +98,14 @@ namespace OccultSanctum
             foreach (var lr in go.GetComponentsInChildren<LineRenderer>(true)) { var c = new Color(0.06f, 0.05f, 0.08f, 1f); lr.startColor = c; lr.endColor = c; }   // the legs drawn by lines: black
             try
             {
-                var dead = Art.Pivoted("elder_dead", new Vector2(0.5f, 0.5f), 32f);
+                var dead = Art.Pivoted("elder_dead", new Vector2(0.5f, 0.5f), 26f);   // a little bigger (the user)
                 if (dead != null) mob.deadBodySprites = new[] { dead };
             }
             catch { }
             try { mob.creatureLocalizedName = "Sanctum/Elder"; } catch { }
             mob.creatureID = Id;
             Human.Apply(mob);                                                      // a man's voice, red blood
-            mob.customPreviewSprite = Art.Pivoted("elder_preview", new Vector2(0.5f, 0.5f), 36f);
+            mob.customPreviewSprite = Snapshot.Of(go, mob.creatureID, Art.Pivoted("elder_preview", new Vector2(0.5f, 0.5f), 36f));   // taken from himself (the user: the hand-made ones were crooked)
         }
     }
 

@@ -115,7 +115,7 @@ namespace OccultSanctum
             try { mob.creatureLocalizedName = "Sanctum/Spearman"; } catch { }
             mob.creatureID = Id;
             Human.Apply(mob);                                                      // a man's voice, red blood
-            mob.customPreviewSprite = Art.Pivoted("spear_preview", new Vector2(0.5f, 0.5f), 32f);
+            mob.customPreviewSprite = Snapshot.Of(go, mob.creatureID, Art.Pivoted("spear_preview", new Vector2(0.5f, 0.5f), 32f), 1f, 0f, 36f / 46f);   // posed like the orc pikeman's own picture: side on, the spear upright in both hands (the user)   // taken from himself (the user: the hand-made ones were crooked)
         }
     }
 

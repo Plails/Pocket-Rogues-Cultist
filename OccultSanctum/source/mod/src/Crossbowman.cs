@@ -104,7 +104,7 @@ namespace OccultSanctum
             try { mob.creatureLocalizedName = "Sanctum/Crossbowman"; } catch { }
             mob.creatureID = Id;
             Human.Apply(mob);                                                      // a man's voice, red blood
-            mob.customPreviewSprite = Art.Pivoted("xbow_preview", new Vector2(0.5f, 0.5f), 32f);
+            mob.customPreviewSprite = Snapshot.Of(go, mob.creatureID, Art.Pivoted("xbow_preview", new Vector2(0.5f, 0.5f), 32f));   // taken from himself (the user: the hand-made ones were crooked)
         }
     }
 

@@ -14,6 +14,38 @@ namespace FlagellantMod
 
         static Vector2 Dir(float rot) => new Vector2(Mathf.Cos(rot * Mathf.Deg2Rad), Mathf.Sin(rot * Mathf.Deg2Rad));
 
+        // ---------------- the whip striking something (the user's list): a micro shake of 1-2 pixels and a short sharp crack
+        static AudioClip crackClip; static bool crackLooked;
+        public static void WhipImpact(Vector2 at)
+        {
+            FLogic.Shake(0.06f, 0.035f);
+            try
+            {
+                if (!crackLooked)
+                {
+                    crackLooked = true;
+                    // a whip sound of the game, if it has one; else a crack made here: a sharp burst of noise, gone in 70 ms
+                    foreach (var c in Resources.FindObjectsOfTypeAll<AudioClip>())
+                        if (c != null && (c.name.IndexOf("whip", System.StringComparison.OrdinalIgnoreCase) >= 0 || c.name.IndexOf("lash", System.StringComparison.OrdinalIgnoreCase) >= 0)) { crackClip = c; break; }
+                    if (crackClip == null)
+                    {
+                        int rate = 44100, n = (int)(rate * 0.07f);
+                        var data = new float[n]; var rnd = new System.Random(7);
+                        for (int i = 0; i < n; i++)
+                        {
+                            float t = i / (float)rate, env = Mathf.Exp(-t * 70f) * Mathf.Min(1f, t * 3000f);
+                            data[i] = ((float)rnd.NextDouble() * 2f - 1f) * env * 0.75f + Mathf.Sin(t * 2f * Mathf.PI * 2400f) * env * 0.25f;
+                        }
+                        crackClip = AudioClip.Create("Flagellant_whipCrack", n, 1, rate, false);
+                        crackClip.SetData(data, 0);
+                    }
+                    FlagellantPlugin.Log.LogInfo("Whip crack sound: " + crackClip.name);
+                }
+                if (crackClip != null) SFXController.Instance?.PlaySFX(crackClip, at);
+            }
+            catch { }
+        }
+
         // ---------------- Poison Lash: the lash itself (no clouds or extra particles - the game shows the poison on its own)
         public static void LashSwing(Vector2 me, float rot, float reach, int k, Transform follow = null) { }
         public static void LashHit(Vector2 tp) { }
@@ -82,7 +114,17 @@ namespace FlagellantMod
         /// how much later the tip follows the handle (the bend of the lash); the tip cracks this long after the handle stops
         static float TipDelay(WhipKind k) => k.s1 * 0.9f;
 
+        /// (the user's list: "the swing explosive, literally 2-3 frames; the trail not a solid white but see-through grey
+        /// or blood-red so it does not hide the enemies") every lash strikes about twice as fast, its trail half see-through
         static WhipKind Kind(string style)
+        {
+            var k = KindRaw(style);
+            k.s1 = Mathf.Min(k.s1 * 0.5f, 0.045f); k.s2 = Mathf.Min(k.s2 * 0.6f, 0.08f);
+            k.trail = new Color(k.trail.r, k.trail.g, k.trail.b, 0.5f);
+            return k;
+        }
+
+        static WhipKind KindRaw(string style)
         {
             switch (style)
             {
@@ -95,7 +137,7 @@ namespace FlagellantMod
                 case "thornStar": return new WhipKind(1.95f, 0.09f, 0.14f, 0.0025f, 1, 0f, new Color(0.55f, 0.9f, 0.4f, 0.85f), 0.07f);
                 case "martyrChain": return new WhipKind(2.0f, 0.095f, 0.15f, 0.0024f, 1, 0f, new Color(1f, 0.92f, 0.6f, 0.9f), 0.08f);
                 case "doomBell": return new WhipKind(2.1f, 0.1f, 0.16f, 0.0023f, 1, 0f, new Color(0.95f, 0.7f, 0.35f, 0.9f), 0.09f);
-                default: return new WhipKind(2.2f, 0.08f, 0.13f, 0.0025f, 1, 0f, new Color(1f, 1f, 1f, 0.9f), 0.05f);
+                default: return new WhipKind(2.2f, 0.08f, 0.13f, 0.0025f, 1, 0f, new Color(0.72f, 0.07f, 0.08f, 0.9f), 0.05f);   // blood-red, no more white
             }
         }
 
@@ -120,6 +162,7 @@ namespace FlagellantMod
                 var seg = Art.Get("whip", style + "_seg", 42f);
                 var tip = Art.Get("whip", style + "_tip", 42f);
                 if (seg == null || hero == null) { Destroy(gameObject); return; }
+                Out++; counted = true;
                 try { heroSr = hero.heroSprite; } catch { }
                 // the flail in his hand turns into the lash: it is hidden while the lash is out
                 try { held = hero.LeftHandSprite; if (held != null && style != "leather") { hiding++; held.enabled = false; } else held = null; } catch { held = null; }
@@ -155,7 +198,7 @@ namespace FlagellantMod
                 try
                 {
                     var tr = g.AddComponent<TrailRenderer>();
-                    tr.time = 0.14f; tr.minVertexDistance = 0.02f; tr.widthMultiplier = kind.trailW;
+                    tr.time = 0.035f; tr.minVertexDistance = 0.02f; tr.widthMultiplier = kind.trailW;
                     tr.widthCurve = AnimationCurve.Linear(0f, 1f, 1f, 0f);
                     var sh = Shader.Find("Sprites/Default");
                     if (sh != null) tr.material = new Material(sh);
@@ -221,6 +264,7 @@ namespace FlagellantMod
                             var s = segs[i];
                             s.transform.position = new Vector3(p.x + d.x * step * 0.5f, p.y + d.y * step * 0.5f, 0f);
                             s.transform.rotation = Quaternion.Euler(0f, 0f, a);
+                            s.transform.localScale = new Vector3(1f, Mathf.Lerp(1f, 0.5f, f), 1f);          // thinner towards the tip
                             s.color = new Color(1f, 1f, 1f, alpha);
                             p += d * step;
                         }
@@ -236,7 +280,8 @@ namespace FlagellantMod
                 if (t >= done) Destroy(gameObject);
             }
 
-            void OnDestroy() { try { if (held != null && --hiding <= 0) { hiding = 0; held.enabled = true; } } catch { } }
+            public static int Out; bool counted;                                           // (lashes out now: the idle whip hides meanwhile)
+            void OnDestroy() { if (counted) { counted = false; Out = Mathf.Max(0, Out - 1); } try { if (held != null && --hiding <= 0) { hiding = 0; held.enabled = true; } } catch { } }
 
             /// the crack of the tip: a white star flash and a spray of sparks in the lash's colour
             void Crack(Vector2 at, float a)
@@ -252,7 +297,7 @@ namespace FlagellantMod
                     r.color = Color.Lerp(Color.white, kind.trail, 0.3f);
                     if (heroSr != null) { r.sortingLayerID = heroSr.sortingLayerID; r.sortingOrder = heroSr.sortingOrder + 33; }
                     if (GameFx.PreviewLayer >= 0) g.layer = GameFx.PreviewLayer;
-                    var fl = g.AddComponent<FxLife>(); fl.life = 0.16f; fl.grow = 2.0f;
+                    var fl = g.AddComponent<FxLife>(); fl.life = 0.09f; fl.grow = 2.4f;
                 }
                 for (int k = 0; k < 7; k++)                                                        // sparks flying off the tip
                 {
@@ -479,7 +524,7 @@ namespace FlagellantMod
                 r.color = Color.Lerp(Color.white, kind.trail, 0.3f);
                 if (heroSr != null) { r.sortingLayerID = heroSr.sortingLayerID; r.sortingOrder = heroSr.sortingOrder + 33; }
                 if (GameFx.PreviewLayer >= 0) g.layer = GameFx.PreviewLayer;
-                var fl = g.AddComponent<FxLife>(); fl.life = 0.16f; fl.grow = 2.0f;
+                var fl = g.AddComponent<FxLife>(); fl.life = 0.09f; fl.grow = 2.4f;
             }
             for (int k = 0; k < sparks; k++)
             {

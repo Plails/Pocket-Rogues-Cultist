@@ -9,7 +9,7 @@ namespace OccultSanctum
     /// notice the hero: a library (a cultist reading at the lectern), a shooting range (a crossbowman putting bolts
     /// into a target), a barracks (a spearman on guard), a shrine (a cultist praying with spread arms before a
     /// statue), a cell block (a spearman walking his round past the cages), a store, a scholar's study.
-    public static class SideRoom
+    public static partial class SideRoom
     {
         static RectInt r; static char door; static System.Random rnd; static int lat, dep;
         static readonly HashSet<Vector2Int> used = new HashSet<Vector2Int>();
@@ -39,6 +39,7 @@ namespace OccultSanctum
         static bool Take(int u, int v)
         {
             if (u < 0 || v < 0 || u >= lat || v >= dep) return false;
+            if (clear.Contains(new Vector2Int(u, v)) && !onCarpet) return false;       // the carpet and the walks stay clear
             if (v <= 1 && Mathf.Abs(u - doorU) <= 1) return false;                 // the way in stays clear
             var t = Tl(u, v); if (!Lay.Floor(t.x, t.y)) return false;               // (a pillar stands there)
             var p = new Vector2Int(u, v);
@@ -47,6 +48,7 @@ namespace OccultSanctum
         }
         static bool TakeAll(params (int u, int v)[] ts)
         {
+            if (!onCarpet && ts.Any(t => clear.Contains(new Vector2Int(t.u, t.v)))) return false;
             if (ts.Any(t => t.u < 0 || t.v < 0 || t.u >= lat || t.v >= dep || used.Contains(new Vector2Int(t.u, t.v)) || !Lay.Floor(Tl(t.u, t.v).x, Tl(t.u, t.v).y) || (t.v <= 1 && Mathf.Abs(t.u - doorU) <= 1))) return false;
             if (!Open(ts.Select(t => new Vector2Int(t.u, t.v)).ToArray())) return false;
             foreach (var t in ts) used.Add(new Vector2Int(t.u, t.v));
@@ -79,6 +81,12 @@ namespace OccultSanctum
         /// every side room furnished on this floor, with what it is
         public static readonly List<(RectInt r, string role)> Rooms = new List<(RectInt, string)>();
 
+        /// the rooms that need space (a drill, a range, long tables, rows of cages...): at least 5 x 5 tiles
+        static readonly string[] Roomy = { "range", "training", "guardpost", "armory", "barracks", "refectory", "council", "execution", "prison", "scriptorium", "gallery", "warehouse", "summoning", "research" };
+        /// what a small room can be and still look furnished
+        public static readonly string[] Tiny = { "store", "pantry", "shrine", "study", "cell", "alchemy", "tomb" };
+        public static bool Fits(string role, RectInt r) => !Roomy.Contains(role) || Mathf.Min(r.width, r.height) >= 5 && r.width * r.height >= 30;
+
         public static void Furnish(RectInt room, string role, Layout L, System.Random rand)
         {
             Rooms.Add((room, role));
@@ -92,17 +100,19 @@ namespace OccultSanctum
             for (int u = 0; u < lat; u++) { var t = Tl(u, 0); if ((door == 's' || door == 'n') ? t.x == doorAt : t.y == doorAt) { doorU = u; break; } }
             int far = dep - 1, mid = lat / 2;
             SanctumPlugin.Log.LogInfo($"Sanctum: side room {r} ({role}), door {door}");
-            // a worn red rug in the middle of the quieter rooms
-            if (new[] { "library", "study", "dormitory", "shrine", "refectory", "alchemy", "tomb" }.Contains(role) && lat >= 3 && dep >= 4)
-            {
-                var rug = Builder.Sr("occ_rug", T((lat - 1) / 2f, (dep - 1) / 2f), Builder.floorLayer, Builder.floorOrder + 2, Builder.floorMat ?? Builder.litMat);
-                rug.transform.rotation = Quaternion.Euler(0, 0, door == 's' || door == 'n' ? 0f : 90f);
-            }
+            // (the user, 2026-11-22: the rooms looked strange - a rug lay under the furniture, two rugs on top of each
+            // other, jugs and sacks and rubble strewn about the middle, crates askew, half-empty rooms topped up with
+            // odd things) these rooms are laid out anew in SideRoomPlans.cs: one thing that matters at the far wall, a
+            // carpet or a clear walk from the door to it, the two halves of the room alike
+            clear.Clear();
+            if (Planned(role, far, mid)) { Fill(role, far); return; }
             switch (role)
             {
                 case "library":
                 {
-                    for (int u = 0; u + 1 < lat; u += 3) if (TakeAll((u, far), (u + 1, far))) Breakables.Shelf((T(u, far) + T(u + 1, far)) / 2f, FaceDoor);
+                    for (int u = 0; u + 1 < lat; u += 2) if (TakeAll((u, far), (u + 1, far))) Breakables.Shelf((T(u, far) + T(u + 1, far)) / 2f, FaceDoor);
+                    for (int v = 2; v + 1 < far - 1; v += 3) { if (TakeAll((0, v), (0, v + 1))) Breakables.Shelf((T(0, v) + T(0, v + 1)) / 2f, FaceDoor - 90f); if (lat >= 5 && TakeAll((lat - 1, v), (lat - 1, v + 1))) Breakables.Shelf((T(lat - 1, v) + T(lat - 1, v + 1)) / 2f, FaceDoor + 90f); }
+                    Rug();
                     Vector2 lec = default; bool hasLec = false;
                     if (dep >= 4 && Take(mid, far - 2)) { lec = T(mid, far - 2); Breakables.Lectern(lec); hasLec = true; }
                     Corners(p => Breakables.Candles(p));
@@ -115,7 +125,13 @@ namespace OccultSanctum
                 {
                     Vector2 tgt = default; bool has = false;
                     if (TakeAll((mid, far), (mid - 1, far))) { tgt = T(mid - 0.5f, far); Breakables.Target(tgt, FaceDoor); has = true; }
-                    for (int v = 1; v < dep - 1; v++) foreach (int u in new[] { 0, lat - 1 }) if (rnd.Next(3) == 0 && Take(u, v)) Prop(rnd.Next(2) == 0 ? "Box" : "Barrel", T(u, v));
+                    Vector2 tgt2 = default; bool has2 = false;
+                    if (lat >= 7 && TakeAll((lat - 2, far), (lat - 3, far))) { tgt2 = T(lat - 2.5f, far); Breakables.Target(tgt2, FaceDoor); has2 = true; }
+                    float sideRot = door == 's' ? 90f : door == 'n' ? -90f : door == 'w' ? 0f : 180f;
+                    if (dep >= 6 && TakeAll((0, 2), (0, 3))) Breakables.RackX((T(0, 2) + T(0, 3)) / 2f, sideRot);
+                    if (dep >= 6 && lat >= 5 && TakeAll((lat - 1, 2), (lat - 1, 3))) Breakables.Bench((T(lat - 1, 2) + T(lat - 1, 3)) / 2f, FaceDoor + 90f);
+                    for (int v = 1; v < dep - 1; v++) foreach (int u in new[] { 0, lat - 1 }) if (rnd.Next(2) == 0 && Take(u, v)) Prop(rnd.Next(3) == 0 ? "Barrel" : rnd.Next(2) == 0 ? "Box" : "Box2", T(u, v));
+                    if (has2 && Take(lat - 3, 1)) Activity.Give(Crossbowman.Spawn(T(lat - 2.5f, 1)), Activity.Kind.Shoot, tgt2);
                     if (has && Take(mid, 1)) Activity.Give(Crossbowman.Spawn(T(mid, 1)), Activity.Kind.Shoot, tgt);
                     Blood(mid, far - 1);
                     break;
@@ -130,6 +146,9 @@ namespace OccultSanctum
                         if (sat < 2 && rnd.Next(2) == 0) { sat++; Activity.Give(rnd.Next(2) == 0 ? Spearman.Spawn(b) : Crossbowman.Spawn(b), Activity.Kind.Sit, T(mid, dep / 2f)); }
                     }
                     if (lat >= 5 && TakeAll((mid, far), (mid - 1, far))) Breakables.Table(rnd.Next(2), (T(mid, far) + T(mid - 1, far)) / 2f, FaceDoor);
+                    // (no beds: the user had the rooms with beds taken out)
+                    if (Take(0, far)) Furniture(rnd.Next(2) == 0 ? "Dresser" : "Cupboard", T(0, far));
+                    if (Take(lat - 1, far)) Breakables.RackX(T(lat - 1, far), FaceDoor);
                     for (int i = 0; i < 2; i++) { int u = rnd.Next(lat), v = rnd.Next(1, dep); if (Take(u, v)) Prop("GroundBag", T(u, v)); }
                     if (Take(mid, 2)) Activity.Give(Spearman.Spawn(T(mid, 2)), Activity.Kind.Guard, T(doorU, -2));
                     if (rnd.Next(2) == 0 && Take(lat - 1, far)) Activity.Give(Crossbowman.Spawn(T(lat - 1, far)), Activity.Kind.Guard, T(doorU, 0));
@@ -169,6 +188,8 @@ namespace OccultSanctum
                     if (lat >= 4 && TakeAll((mid, far), (mid - 1, far))) Breakables.Table(rnd.Next(2), (T(mid, far) + T(mid - 1, far)) / 2f, FaceDoor);
                     if (Take(0, far)) Breakables.Candelabra(T(0, far));
                     if (Take(lat - 1, far)) Breakables.SkullPile(T(lat - 1, far));
+                    if (dep >= 5 && TakeAll((0, 2), (0, 3))) Breakables.Shelf((T(0, 2) + T(0, 3)) / 2f, FaceDoor - 90f);
+                    if (dep >= 5 && lat >= 5 && TakeAll((lat - 1, 2), (lat - 1, 3))) Breakables.Shelf((T(lat - 1, 2) + T(lat - 1, 3)) / 2f, FaceDoor + 90f);
                     Books(4, 8);
                     var s = Builder.Sr("occ_sigil_" + rnd.Next(3), T(mid, dep / 2f), Builder.floorLayer, Builder.floorOrder + 2, Builder.floorMat ?? Builder.litMat);
                     s.transform.rotation = Quaternion.Euler(0, 0, rnd.Next(360));
@@ -176,24 +197,42 @@ namespace OccultSanctum
                     if (rnd.Next(2) == 0) { var w = Activity.Give(Crossbowman.Spawn(T(mid, 1)), Activity.Kind.Wander, T(mid, dep / 2f)); if (w != null) w.Radius = Mathf.Min(lat, dep) / 2f - 1f; }
                     break;
                 }
-                case "warehouse":                                                      // a great store: rows of barrels and crates with aisles between
+                case "warehouse":                                                      // (the user: "make the stores really look like stores")
                 {
-                    string[] stuff = { "Box", "Barrel", "BarrelAlt", "Box2", "Box3", "GroundBoxes", "Logs", "GroundBag", "Barrel", "Box", "GroundBag", "Box2" };
-                    Webs(4); Dirt(4, 7);
-                    for (int v = 2; v < dep; v += 3)
-                        for (int u = 0; u < lat; u++)
+                    // a real store: a main aisle from the door to the far wall; on both sides neat stacks two tiles deep
+                    // with cross aisles between them, each stack of one kind of goods (barrels, crates, sacks, jugs)
+                    // standing square in rows; great heaps of crates and logs along the far wall; the storekeeper's table
+                    // by the door
+                    Webs(2); Dirt(2, 4);
+                    string[][] goods = { new[] { "Barrel", "BarrelAlt" }, new[] { "Box", "Box2", "Box3" }, new[] { "GroundBag" }, new[] { "Box", "Box" }, new[] { "Barrel", "Barrel" }, new[] { "Jug", "Jug", "Barrel" } };
+                    int aisle = doorU, kind = rnd.Next(goods.Length);
+                    bool wide = lat >= 8;                                                  // a wide store: the main aisle two tiles
+                    bool Aisle(int u) => u == aisle || (wide && u == aisle + (aisle < lat / 2 ? 1 : -1));
+                    for (int v = 2; v + 1 < far; v += 3)                                     // the stacks: rows two deep, a cross aisle after each
+                        foreach (int side in new[] { -1, 1 })
                         {
-                            if (Mathf.Abs(u - doorU) <= 1 || u == lat / 2) continue;           // the aisles
-                            if (rnd.Next(5) > 0 && Take(u, v)) Prop(stuff[rnd.Next(stuff.Length)], T(u, v) + new Vector2(R(-.12f, .12f), R(-.12f, .12f)));
-                            if (v + 1 < dep && rnd.Next(3) == 0 && Take(u, v + 1)) Prop(stuff[rnd.Next(stuff.Length)], T(u, v + 1));
+                            var g = goods[kind++ % goods.Length];
+                            int k = 0;
+                            for (int u = side < 0 ? 0 : lat - 1; side < 0 ? u < lat : u >= 0; u -= side)
+                            {
+                                if (Aisle(u)) break;
+                                if (side < 0 ? u > aisle : u < aisle) break;
+                                for (int dv = 0; dv < 2; dv++)
+                                    if (Take(u, v + dv)) { var name = g[k++ % g.Length]; var go = Builder.Spawn(Prefabs.Cont(name), T(u, v + dv), 0f); Builder.Own(go); }
+                            }
                         }
-                    foreach (int u in new[] { 0, lat - 1 }) for (int v = 1; v < dep; v++) if (rnd.Next(5) > 0 && Take(u, v)) Prop(stuff[rnd.Next(stuff.Length)], T(u, v));
-                    for (int u = 1; u < lat - 1; u++) if (rnd.Next(4) > 0 && Take(u, far)) Prop(stuff[rnd.Next(stuff.Length)], T(u, far));
-                    // they work: loaded carts pushed up and down the aisles; a crossbowman and a spearman go the rounds together
-                    Activity.Give(Cultist.Spawn(T(lat / 2, 1)), Activity.Kind.Patrol, default, T(lat / 2, 1.5f), T(lat / 2, Mathf.Max(2, far - 1)));
-                    if (Mathf.Abs(doorU - lat / 2) >= 3) Activity.Give(Spearman.Spawn(T(doorU, far - 1)), Activity.Kind.Patrol, default, T(doorU, Mathf.Max(2, far - 1)), T(doorU, 2));
-                    Pair(Crossbowman.Spawn(T(doorU, 2)), Spearman.Spawn(T(doorU, 1)), T(doorU, 2), T(doorU, far), T(lat / 2, far), T(lat / 2, 1));
-                    if (rnd.Next(2) == 0 && Take(lat / 2, far)) Activity.Give(Spearman.Spawn(T(lat / 2, far)), Activity.Kind.Guard, T(doorU, 0));
+                    for (int u = 0; u < lat; u++)                                            // the far wall: great heaps
+                        if (!Aisle(u) && Take(u, far)) Prop(u % 3 == 0 ? "Logs" : u % 3 == 1 ? "GroundBoxes" : "GroundWoods", T(u, far));
+                    // the storekeeper's table by the door, beside the aisle, and him at it
+                    int tu = aisle + 2 < lat - 1 ? aisle + 2 : aisle - 3;
+                    if (tu >= 0 && tu + 1 < lat && TakeAll((tu, 1), (tu + 1, 1)))
+                    {
+                        Breakables.Table(rnd.Next(2), (T(tu, 1) + T(tu + 1, 1)) / 2f, FaceDoor);
+                        Activity.Give(Cultist.Spawn(T(tu, 0) + new Vector2(0.5f, 0f)), Activity.Kind.Guard, (T(tu, 1) + T(tu + 1, 1)) / 2f);
+                    }
+                    // workers go up and down the aisle; a spearman keeps the store
+                    Activity.Give(Cultist.Spawn(T(aisle, 1)), Activity.Kind.Patrol, default, T(aisle, 1.5f), T(aisle, Mathf.Max(2, far - 1)));
+                    Pair(Crossbowman.Spawn(T(aisle, 2)), Spearman.Spawn(T(aisle, 1)), T(aisle, 2), T(aisle, Mathf.Max(2, far - 1)));
                     break;
                 }
                 case "research":                                                       // the cult's study of flesh: specimens in cages, desks, books, sigils
@@ -264,24 +303,7 @@ namespace OccultSanctum
                     Pair(Spearman.Spawn(T(mid, 2)), Spearman.Spawn(T(mid, 1)), T(mid, 2), T(mid, far), T(mid, 2));
                     break;
                 }
-                case "training":                                                       // dummies to thrust at, a target to shoot, a rack of spears
-                {
-                    var dummies = new List<Vector2>();
-                    for (int u = 1; u < lat - 1 && dummies.Count < 3; u += 3) if (Take(u, far - 1)) { var p = T(u, far - 1); Breakables.Dummy(p, FaceDoor); dummies.Add(p); }
-                    Vector2 tgt = default; bool hasT = false;
-                    if (lat >= 6 && TakeAll((lat - 2, far), (lat - 3, far))) { tgt = T(lat - 2.5f, far); Breakables.Target(tgt, FaceDoor); hasT = true; }
-                    float rackRot = door == 's' ? 90f : door == 'n' ? -90f : door == 'w' ? 0f : 180f;
-                    if (TakeAll((0, mid), (0, mid + 1))) { var rp = (T(0, mid) + T(0, mid + 1)) / 2f; if (rnd.Next(2) == 0) Breakables.Rack(rp, rackRot); else Breakables.RackX(rp, rackRot); }
-                    if (TakeAll((0, mid + 3), (0, mid + 4))) { var rp = (T(0, mid + 3) + T(0, mid + 4)) / 2f; Breakables.RackX(rp, rackRot); }
-                    for (int v = 1; v < far - 2; v += 2) if (TakeAll((lat - 1, v), (lat - 1, v + 1))) Breakables.Bench((T(lat - 1, v) + T(lat - 1, v + 1)) / 2f, FaceDoor + 90f);
-                    foreach (var d in dummies.Take(3))
-                    {
-                        var at = d + (T(0, 0) - T(0, 1)) * 1.3f;
-                        Activity.Give(Spearman.Spawn(at), Activity.Kind.Train, d);
-                    }
-                    if (hasT) Activity.Give(Crossbowman.Spawn(T(lat - 2.5f, 1)), Activity.Kind.Shoot, tgt);
-                    break;
-                }
+                case "training": Training(far, mid); break;                          // the user: many kinds of training room
                 case "refectory":                                                      // the cult's long tables, benches both sides, jugs and barrels
                 {
                     for (int v = 2; v < far - 1; v += 4)
@@ -297,14 +319,23 @@ namespace OccultSanctum
                                 if (rnd.Next(3) == 0) Activity.Give(rnd.Next(2) == 0 ? Spearman.Spawn(b2) : Crossbowman.Spawn(b2), Activity.Kind.Sit, c);
                             }
                     foreach (int u in new[] { 0, lat - 1 }) if (Take(u, far)) Prop("Barrel", T(u, far));
+                    if (lat >= 6 && TakeAll((mid - 1, far), (mid, far)))
+                    {
+                        var block = (T(mid - 1, far) + T(mid, far)) / 2f; Breakables.Table(rnd.Next(2), block, FaceDoor); Blood(mid - 0.5f, far);
+                        Activity.Give(Cultist.Spawn(T(mid, far - 1)), Activity.Kind.Work, block);                        // the cook chops for the table
+                    }
                     for (int i = 0; i < 3; i++) { int u = rnd.Next(lat), v = rnd.Next(1, dep); if (Take(u, v)) Prop("Jug", T(u, v)); }
                     { int u = rnd.Next(lat), v = rnd.Next(2, dep); if (Take(u, v)) { var a = Activity.Give(Cultist.Spawn(T(u, v)), Activity.Kind.Sit, T(mid, dep / 2f)); if (a != null) a.StartStanding = true; } }   // on his feet; sits down where there is room
                     break;
                 }
                 case "dormitory":                                                      // beddings along the walls, a chest of drawers or a cupboard
                 {
-                    for (int v = 1; v < dep - 1; v += 2) foreach (int u in new[] { 0, lat - 1 }) if (TakeAll((u, v), (u, v + 1))) Breakables.Bedroll((T(u, v) + T(u, v + 1)) / 2f, FaceDoor + 180f);
-                    if (Take(mid, far)) Prop(rnd.Next(2) == 0 ? "Dresser" : "Cupboard", T(mid, far));
+                    var beds = new List<Container>();
+                    for (int v = 1; v < dep - 1; v += 2) foreach (int u in new[] { 0, lat - 1 }) if (TakeAll((u, v), (u, v + 1))) { var bd = Breakables.Bedroll((T(u, v) + T(u, v + 1)) / 2f, FaceDoor + 180f); if (bd != null) beds.Add(bd); }
+                    // some of the cultists are asleep in their beds (the user)
+                    foreach (var bd in beds.OrderBy(_ => rnd.Next()).Take(Mathf.Clamp(beds.Count / 2 + rnd.Next(2), 1, 4)))
+                    { var sl = Activity.Give(Cultist.Spawn(bd.transform.position), Activity.Kind.Sleep, bd.transform.position); if (sl != null) sl.Bed = bd; }
+                    if (Take(mid, far)) Furniture(rnd.Next(2) == 0 ? "Dresser" : "Cupboard", T(mid, far));
                     Corners(p => Breakables.Candles(p));
                     if (Take(mid, far - 2)) Activity.Give(Cultist.Spawn(T(mid, far - 2)), Activity.Kind.Read, T(mid, far));
                     break;
@@ -314,8 +345,11 @@ namespace OccultSanctum
                     int rk = 0;
                     for (int u = 0; u + 1 < lat; u += 3) if (TakeAll((u, far), (u + 1, far))) { var rp = (T(u, far) + T(u + 1, far)) / 2f; if (rk++ % 2 == 0) Breakables.Rack(rp, FaceDoor); else Breakables.RackX(rp, FaceDoor); }
                     string[] ammo = { "Box", "Box2", "Box3", "Barrel", "GroundBag", "GroundBoxes" };
-                    foreach (int u in new[] { 0, lat - 1 }) for (int v = 1; v < far; v++) if (rnd.Next(4) > 0 && Take(u, v)) Prop(ammo[rnd.Next(ammo.Length)], T(u, v));
-                    Webs(2); Dirt(2, 4);
+                    foreach (int u in new[] { 0, lat - 1 }) for (int v = 1; v < far; v++) if (rnd.Next(10) > 0 && Take(u, v)) Prop(ammo[rnd.Next(ammo.Length)], T(u, v));
+                    for (int u = 1; u < lat - 1; u++) if (Take(u, far)) Prop(ammo[rnd.Next(ammo.Length)], T(u, far));            // between the racks
+                    for (int v = 2; v < far - 1; v += 2) for (int u = 2; u < lat - 2; u++)                                  // stacks in the middle, an aisle left
+                        if (Mathf.Abs(u - doorU) > 1 && u != mid && rnd.Next(3) == 0 && Take(u, v)) Prop(ammo[rnd.Next(ammo.Length)], T(u, v));
+                    Webs(2); Dirt(3, 5);
                     if (Take(mid, 1)) { var g = Activity.Give(Crossbowman.Spawn(T(mid, 1)), Activity.Kind.Guard, T(doorU, -2)); if (g != null) g.Stay = true; }
                     break;
                 }
@@ -325,8 +359,13 @@ namespace OccultSanctum
                     if (Take(mid + 1, far)) Breakables.RedBrazier(T(mid + 1, far));
                     if (Take(0, far)) Prop("Logs", T(0, far));
                     if (Take(lat - 1, far)) Prop("Barrel", T(lat - 1, far));
-                    for (int v = 1; v < far; v++) if (rnd.Next(3) == 0 && Take(0, v)) Prop(rnd.Next(2) == 0 ? "GroundWoods" : "Box", T(0, v));
-                    if (Take(mid, far - 2)) Activity.Give(Spearman.Spawn(T(mid, far - 2)), Activity.Kind.Guard, T(mid, far));
+                    for (int v = 1; v < far; v++) if (rnd.Next(2) == 0 && Take(0, v)) Prop(rnd.Next(2) == 0 ? "GroundWoods" : "Box", T(0, v));
+                    float fr = door == 's' ? -90f : door == 'n' ? 90f : door == 'w' ? 180f : 0f;
+                    if (dep >= 5 && TakeAll((lat - 1, 1), (lat - 1, 2))) Breakables.Rack((T(lat - 1, 1) + T(lat - 1, 2)) / 2f, fr);
+                    if (dep >= 7 && TakeAll((lat - 1, 4), (lat - 1, 5))) Breakables.RackX((T(lat - 1, 4) + T(lat - 1, 5)) / 2f, fr);
+                    Dirt(2, 4);
+                    if (Take(mid, far - 1)) Activity.Give(Cultist.Spawn(T(mid, far - 1)), Activity.Kind.Work, (T(mid, far) + T(mid - 1, far)) / 2f);   // the smith at his anvil
+                    if (Take(mid, far - 3)) Activity.Give(Spearman.Spawn(T(mid, far - 3)), Activity.Kind.Guard, T(mid, far));
                     break;
                 }
                 case "tomb":                                                           // tombs of the cult's dead between candles, a statue over them
@@ -343,8 +382,10 @@ namespace OccultSanctum
                     foreach (int u in new[] { 0, lat - 1 }) if (Take(u, far)) Breakables.RedBrazier(T(u, far));
                     Vector2 desk = default; bool hasDesk = false;
                     if (dep >= 5 && TakeAll((mid, far - 2), (mid - 1, far - 2))) { desk = (T(mid, far - 2) + T(mid - 1, far - 2)) / 2f; Breakables.Table(rnd.Next(2), desk, FaceDoor); hasDesk = true; }
-                    for (int i = 0; i < 3; i++) { int u = rnd.Next(lat), v = rnd.Next(1, dep); if (Take(u, v)) Prop("Jug", T(u, v)); }
+                    for (int i = 0; i < 5; i++) { int u = rnd.Next(lat), v = rnd.Next(1, dep); if (Take(u, v)) Prop("Jug", T(u, v)); }
+                    if (dep >= 5 && TakeAll((0, 2), (0, 3))) Breakables.Shelf((T(0, 2) + T(0, 3)) / 2f, FaceDoor - 90f);
                     if (Take(lat - 1, 1)) Breakables.SkullPile(T(lat - 1, 1));
+                    Dirt(1, 3);
                     Books(1, 3);
                     if (hasDesk && Take(mid, Mathf.Max(1, far - 3))) Activity.Give(Cultist.Spawn(T(mid, Mathf.Max(1, far - 3))), Activity.Kind.Read, desk);
                     { var w = Activity.Give(Cultist.Spawn(T(mid, 1)), Activity.Kind.Wander, T(mid, dep / 2f)); if (w != null) w.Radius = Mathf.Min(lat, dep) / 2f - 1f; }
@@ -357,8 +398,8 @@ namespace OccultSanctum
                     Sigil(mid, cv);
                     bool ob = Take(mid, cv); if (ob) Breakables.Obelisk(T(mid, cv));
                     foreach (var (du, dv) in new[] { (-2, 0), (2, 0), (0, 2), (-1, -1), (1, -1), (-1, 1), (1, 1) }) if (rnd.Next(4) > 0 && Take(mid + du, cv + dv)) Breakables.Candles(T(mid + du, cv + dv));
-                    if (Take(0, far)) Breakables.Statue(T(0, far), FaceDoor + 135f);
-                    if (Take(lat - 1, far)) Breakables.Statue(T(lat - 1, far), FaceDoor - 135f);
+                    if (Take(0, far)) Breakables.Statue(T(0, far), FaceDoor);           // square, its back to the wall (the user: not askew)
+                    if (Take(lat - 1, far)) Breakables.Statue(T(lat - 1, far), FaceDoor);
                     foreach (int u in new[] { 0, lat - 1 }) if (Take(u, 1)) Breakables.Candelabra(T(u, 1));
                     Rug();
                     if (ob && cv - 2 >= 1 && Take(mid, cv - 2)) Activity.Give(Cultist.Spawn(T(mid, cv - 2)), Activity.Kind.Pray, T(mid, cv));
@@ -443,10 +484,13 @@ namespace OccultSanctum
                 {
                     string[] stuff = { "Barrel", "BarrelAlt", "Box", "Jug", "Jug", "GroundBag", "Box2", "GroundBag" };
                     Webs(rnd.Next(1, 4)); Dirt(1, 3);
-                    for (int v = 1; v < dep; v++) foreach (int u in new[] { 0, lat - 1 }) if (rnd.Next(3) > 0 && Take(u, v)) Prop(stuff[rnd.Next(stuff.Length)], T(u, v));
-                    for (int u = 1; u < lat - 1; u++) if (rnd.Next(2) == 0 && Take(u, far)) Prop(stuff[rnd.Next(stuff.Length)], T(u, far));
-                    if (lat >= 5 && dep >= 5 && TakeAll((mid - 1, dep / 2), (mid, dep / 2))) Breakables.Table(rnd.Next(2), (T(mid - 1, dep / 2) + T(mid, dep / 2)) / 2f, FaceDoor);
-                    if (Take(mid, far)) Prop(rnd.Next(2) == 0 ? "Cupboard" : "Dresser", T(mid, far));
+                    for (int v = 1; v < dep; v++) foreach (int u in new[] { 0, lat - 1 }) if (rnd.Next(10) > 0 && Take(u, v)) Prop(stuff[rnd.Next(stuff.Length)], T(u, v));
+                    for (int u = 1; u < lat - 1; u++) if (rnd.Next(6) > 0 && Take(u, far)) Prop(stuff[rnd.Next(stuff.Length)], T(u, far));
+                    foreach (int u in new[] { 1, lat - 2 }) for (int v = 2; v < far; v++) if (rnd.Next(3) == 0 && Take(u, v)) Prop(stuff[rnd.Next(stuff.Length)], T(u, v));   // a second row
+                    Vector2 block = default; bool hasBlock = false;
+                    if (lat >= 5 && dep >= 5 && TakeAll((mid - 1, dep / 2), (mid, dep / 2))) { block = (T(mid - 1, dep / 2) + T(mid, dep / 2)) / 2f; Breakables.Table(rnd.Next(2), block, FaceDoor); hasBlock = true; }
+                    if (hasBlock) { Blood(mid - 0.5f, dep / 2f); Activity.Give(Cultist.Spawn(T(mid, dep / 2 - 1)), Activity.Kind.Work, block); }   // the butcher cuts the meat
+                    if (Take(mid, far)) Furniture(rnd.Next(2) == 0 ? "Cupboard" : "Dresser", T(mid, far));
                     Webs(2);
                     { var w = Activity.Give(Cultist.Spawn(T(mid, 1)), Activity.Kind.Wander, T(mid, dep / 2f)); if (w != null) w.Radius = Mathf.Min(lat, dep) / 2f - 1f; }
                     break;
@@ -475,21 +519,64 @@ namespace OccultSanctum
 
                 default:                                                                // a store
                 {
-                    string[] stuff = { "Box", "Barrel", "BarrelAlt", "Box2", "Box3", "GroundBag", "GroundBoxes", "GroundBag", "Jug" };
-                    Webs(rnd.Next(2, 5)); Dirt(2, 5);
-                    for (int v = 1; v < dep; v++) foreach (int u in new[] { 0, lat - 1 }) if (rnd.Next(6) > 0 && Take(u, v)) Prop(stuff[rnd.Next(stuff.Length)], T(u, v) + new Vector2(R(-.1f, .1f), R(-.1f, .1f)));
-                    for (int u = 1; u < lat - 1; u++) if (rnd.Next(4) > 0 && Take(u, far)) Prop(stuff[rnd.Next(stuff.Length)], T(u, far));
-                    // a heap or two in the middle, with room to walk round
-                    for (int i = 0; i < (lat * dep) / 14; i++) { int u = rnd.Next(2, Mathf.Max(3, lat - 2)), v = rnd.Next(2, Mathf.Max(3, far - 1)); if (Take(u, v)) Prop(stuff[rnd.Next(stuff.Length)], T(u, v)); }
+                    // (the user: stores must look like stores) goods in order: each wall its own kind in a neat row
+                    // (barrels along one, crates along the other, sacks or jugs along the far wall), heaps in the far
+                    // corners, the middle kept clear to walk
+                    string[][] goods = { new[] { "Barrel", "BarrelAlt" }, new[] { "Box", "Box2", "Box3" }, new[] { "GroundBag" }, new[] { "Jug", "Jug", "Barrel" } };
+                    int g0 = rnd.Next(goods.Length);
+                    Webs(rnd.Next(1, 3)); Dirt(1, 3);
+                    foreach (var (u, gi) in new[] { (0, g0), (lat - 1, g0 + 1) })
+                    {
+                        var g = goods[gi % goods.Length]; int k = 0;
+                        for (int v = 1; v < far; v++) if (Take(u, v)) { var go = Builder.Spawn(Prefabs.Cont(g[k++ % g.Length]), T(u, v), 0f); Builder.Own(go); }
+                    }
+                    { var g = goods[(g0 + 2) % goods.Length]; int k = 0; for (int u = 1; u < lat - 1; u++) if (Take(u, far)) { var go = Builder.Spawn(Prefabs.Cont(g[k++ % g.Length]), T(u, far), 0f); Builder.Own(go); } }
+                    if (Take(0, far)) Prop("GroundBoxes", T(0, far));
+                    if (Take(lat - 1, far)) Prop("Logs", T(lat - 1, far));
+                    if (lat >= 6 && dep >= 6)                                                // a bigger store: a second row by each wall
+                        foreach (var (u, gi) in new[] { (1, g0), (lat - 2, g0 + 1) })
+                        {
+                            var g = goods[gi % goods.Length]; int k = 0;
+                            for (int v = 2; v < far - 1; v++) if (Take(u, v)) { var go = Builder.Spawn(Prefabs.Cont(g[k++ % g.Length]), T(u, v), 0f); Builder.Own(go); }
+                        }
                     if (lat >= 5 && dep >= 5) Activity.Give(Cultist.Spawn(T(mid, 1)), Activity.Kind.Patrol, default, T(mid, 1.5f), T(mid, Mathf.Max(2, far - 1)));
                     if (rnd.Next(2) == 0 && Take(mid, 2)) Activity.Give(Crossbowman.Spawn(T(mid, 2)), Activity.Kind.Patrol, T(mid, 2), T(mid, Mathf.Max(2, far - 1)));
                     break;
                 }
             }
+            Fill(role, far);
+        }
+
+        /// a room that came out half empty gets the things such a room has along its walls (no room is left with a
+        /// lone thing in it - the user)
+        static void Fill(string role, int far)
+        {
+            Dress(role, far);                                                 // (the user: the rooms full, like a real cult's)
+            int want = Mathf.Max(3, lat * dep / 6);
+            if (used.Count >= want) return;
+            string[] stuff = role == "range" || role == "training" || role == "guardpost" || role == "armory" || role == "barracks" ? new[] { "Box", "Box2", "Barrel", "GroundBag", "GroundBoxes" }
+                           : role == "library" || role == "study" || role == "scriptorium" || role == "research" ? new[] { "Box", "Jug", "GroundBag" }
+                           : new[] { "Box", "Barrel", "BarrelAlt", "Box2", "GroundBag", "Jug" };
+            int added = 0;
+            // (the user: odd things strewn about) in pairs, the same thing on both side walls at the same depth,
+            // every other tile; the quiet rooms get candle stands, the others their own goods
+            bool quiet = new[] { "library", "study", "shrine", "tomb", "sanctuary", "council", "gallery", "scriptorium", "summoning", "ossuary" }.Contains(role);
+            string thing = stuff[rnd.Next(stuff.Length)];
+            for (int v = 2; v < far && used.Count < want; v += 2)
+                if (Pair2(0, v, p => { if (quiet) Breakables.Candelabra(p); else Prop(thing, p); })) added += 2;
+            if (added > 0) { SanctumPlugin.Log.LogInfo("Sanctum: side room " + role + " was half empty - " + added + " things added along the walls"); }
         }
 
         static readonly string[] Big = { "SkeletonTombs", "TombObjectEmpty", "TombObject_Hero", "Logs", "GroundWoods", "Forge_table", "Cupboard", "Dresser" };
-        static void Prop(string name, Vector2 p) { var pr = Prefabs.Cont(name); if (pr != null) Builder.Own(Builder.Spawn(pr, p, Big.Contains(name) ? 0f : R(-4, 4))); }
+        static void Prop(string name, Vector2 p) { var pr = Prefabs.Cont(name); if (pr != null) Builder.Own(Builder.Spawn(pr, p, 0f)); }
+        /// furniture against the far wall: its back to the wall, its front to the room (the user: a chest of drawers
+        /// stood the same way whatever wall it was by)
+        static void Furniture(string name, Vector2 p)
+        {
+            var pr = Prefabs.Cont(name); if (pr == null) return;
+            var go = Builder.Spawn(pr, p, FaceDoor); Builder.Own(go);
+            if (go != null) foreach (var c in go.GetComponentsInChildren<Container>(true)) { Breakables.Pin(c); c.playDamageAnimation = true; }   // it stands fast against its wall, and jerks when struck like the game's things
+        }
 
         static void Corners(Action<Vector2> put)
         {
@@ -509,6 +596,105 @@ namespace OccultSanctum
             var a = Activity.Give(lead, Activity.Kind.Patrol, look, route);
             if (a != null && mate != null) { var f = Activity.Give(mate, Activity.Kind.Follow, look); if (f != null) f.Leader = lead.transform; }
             else if (mate != null) Activity.Give(mate, Activity.Kind.Guard, look);
+        }
+
+        /// a training room, one of several kinds (the user: many kinds of them)
+        static void Training(int far, int mid)
+        {
+            Vector2 du = T(1, 0) - T(0, 0), dv = T(0, 1) - T(0, 0);                       // across the room / toward the far wall
+            float sideRot = door == 's' ? 90f : door == 'n' ? -90f : door == 'w' ? 0f : 180f;   // a rack against a side wall
+            int kind = lat >= 5 && dep >= 6 ? rnd.Next(6) : 5;
+            SanctumPlugin.Log.LogInfo("Sanctum: training room, kind " + new[] { "spear drill", "shooting gallery", "yard", "circle", "rest and drill", "mixed" }[kind]);
+            switch (kind)
+            {
+                case 0:                                                                       // the spear drill: a row of dummies, the spearmen in a line before them, the drill master watching
+                {
+                    var ds = new List<Vector2>();
+                    for (int u = 1; u < lat - 1; u += 2) if (Take(u, far - 1)) { var d = T(u, far - 1); Breakables.Dummy(d, FaceDoor); ds.Add(d); Take(u, far - 2); }
+                    foreach (var d in ds) if (rnd.Next(6) > 0) Activity.Give(Spearman.Spawn(d - dv * 1.3f), Activity.Kind.Train, d);
+                    for (int v = 1; v + 1 < far - 2; v += 3) foreach (int u in new[] { 0, lat - 1 }) if (TakeAll((u, v), (u, v + 1))) { var rp = (T(u, v) + T(u, v + 1)) / 2f; if (rnd.Next(2) == 0) Breakables.Rack(rp, sideRot); else Prop(rnd.Next(2) == 0 ? "Barrel" : "Box", rp); }
+                    if (Take(mid, 1)) { var g = Activity.Give(Crossbowman.Spawn(T(mid, 1)), Activity.Kind.Guard, T(mid, far - 1)); if (g != null) g.Stay = true; }
+                    Dirt(2, 4);
+                    break;
+                }
+                case 1:                                                                       // the shooting gallery: targets along the far wall, crossbowmen shooting from the near end, crates of bolts
+                {
+                    var ts = new List<(Vector2 p, int u)>();
+                    for (int u = 0; u + 1 < lat; u += 3) if (TakeAll((u, far), (u + 1, far))) { var t = T(u + 0.5f, far); Breakables.Target(t, FaceDoor); ts.Add((t, u)); }
+                    foreach (var t in ts) if (rnd.Next(5) > 0 && Take(t.u, 1)) Activity.Give(Crossbowman.Spawn(T(t.u + 0.5f, 1)), Activity.Kind.Shoot, t.p);
+                    foreach (int u in new[] { 0, lat - 1 }) for (int v = 2; v < far - 1; v++) if (rnd.Next(3) > 0 && Take(u, v)) Prop(rnd.Next(3) == 0 ? "Barrel" : rnd.Next(2) == 0 ? "Box" : "Box2", T(u, v));
+                    if (TakeAll((0, far - 1), (0, far - 2))) Breakables.RackX((T(0, far - 1) + T(0, far - 2)) / 2f, sideRot);
+                    if (TakeAll((lat - 1, far - 1), (lat - 1, far - 2))) Breakables.RackX((T(lat - 1, far - 1) + T(lat - 1, far - 2)) / 2f, sideRot + 180f);
+                    Dirt(1, 3);
+                    break;
+                }
+                case 2:                                                                       // the yard: dummies in the middle, spearmen at them from both sides, the rest on benches by the walls
+                {
+                    int cv = Mathf.Clamp(dep / 2, 2, far - 2);
+                    var ds = new List<(Vector2 p, float side)>();
+                    foreach (var (u, sd) in new[] { (mid - 1, -1f), (mid + 1, 1f) })
+                        if (u > 0 && u < lat - 1 && Take(u, cv)) { var d = T(u, cv); Breakables.Dummy(d, FaceDoor + (sd < 0 ? -90f : 90f)); ds.Add((d, sd)); Take(u + (int)sd, cv); }
+                    foreach (var d in ds) Activity.Give(Spearman.Spawn(d.p + du * 1.3f * d.side), Activity.Kind.Train, d.p);
+                    int sat = 0;
+                    foreach (int u in new[] { 0, lat - 1 })
+                        if (TakeAll((u, 1), (u, 2)))
+                        {
+                            var bp = (T(u, 1) + T(u, 2)) / 2f; Breakables.Bench(bp, FaceDoor + 90f);
+                            if (sat++ < 2 && rnd.Next(3) > 0) Activity.Give(rnd.Next(2) == 0 ? Spearman.Spawn(bp) : Crossbowman.Spawn(bp), Activity.Kind.Sit, T(mid, cv));
+                        }
+                    for (int u = 1; u + 1 < lat - 1; u += 3) if (TakeAll((u, far), (u + 1, far))) { var rp = (T(u, far) + T(u + 1, far)) / 2f; if (rnd.Next(2) == 0) Breakables.Rack(rp, FaceDoor); else Breakables.RackX(rp, FaceDoor); }
+                    Dirt(3, 5);
+                    break;
+                }
+                case 3:                                                                       // the circle: a dummy on a red sigil, two spearmen at it from either side, candle stands, a cultist looking on
+                {
+                    int cv = Mathf.Clamp(dep / 2, 2, far - 2);
+                    Sigil(mid, cv);
+                    if (Take(mid, cv))
+                    {
+                        var d = T(mid, cv); Breakables.Dummy(d, FaceDoor);
+                        foreach (var sd in new[] { -1, 1 }) if (Take(mid + sd, cv)) Activity.Give(Spearman.Spawn(d + du * 1.3f * sd), Activity.Kind.Train, d);
+                    }
+                    foreach (int u in new[] { 0, lat - 1 }) { if (Take(u, far)) Breakables.Candelabra(T(u, far)); if (Take(u, 1)) Breakables.Candelabra(T(u, 1)); }
+                    if (TakeAll((mid - 1, far), (mid, far))) Breakables.Rack((T(mid - 1, far) + T(mid, far)) / 2f, FaceDoor);
+                    if (Take(mid, 1)) Activity.Give(Cultist.Spawn(T(mid, 1)), Activity.Kind.Guard, T(mid, cv));   // (a cultist: he studies the drill)
+                    Blood(mid, cv + 1);
+                    break;
+                }
+                case 4:                                                                       // rest and drill: a table with benches by the door, a dummy and a target at the far end
+                {
+                    if (dep >= 7 && TakeAll((mid - 1, 2), (mid, 2)))
+                    {
+                        var tb = (T(mid - 1, 2) + T(mid, 2)) / 2f; Breakables.Table(rnd.Next(2), tb, FaceDoor + 90f);
+                        foreach (var v in new[] { 1, 3 })
+                            if (TakeAll((mid - 1, v), (mid, v))) { var bp = (T(mid - 1, v) + T(mid, v)) / 2f; Breakables.Bench(bp, FaceDoor + 90f); if (rnd.Next(3) > 0) Activity.Give(rnd.Next(2) == 0 ? Spearman.Spawn(bp) : Crossbowman.Spawn(bp), Activity.Kind.Sit, tb); }
+                    }
+                    if (Take(1, far - 1)) { var d = T(1, far - 1); Breakables.Dummy(d, FaceDoor); Take(1, far - 2); Activity.Give(Spearman.Spawn(d - dv * 1.3f), Activity.Kind.Train, d); }
+                    if (TakeAll((lat - 2, far), (lat - 3, far))) { var t = T(lat - 2.5f, far); Breakables.Target(t, FaceDoor); if (Take(lat - 3, 1)) Activity.Give(Crossbowman.Spawn(T(lat - 2.5f, Mathf.Max(1, far - 5))), Activity.Kind.Shoot, t); }
+                    foreach (int u in new[] { 0, lat - 1 }) if (Take(u, far)) Prop(rnd.Next(2) == 0 ? "Barrel" : "GroundBag", T(u, far));
+                    if (TakeAll((0, far - 3), (0, far - 4))) Breakables.Rack((T(0, far - 3) + T(0, far - 4)) / 2f, sideRot);
+                    Dirt(2, 3);
+                    break;
+                }
+                default:                                                                      // dummies to thrust at, a target to shoot, a rack of spears (the first kind)
+                {
+                    var dummies = new List<Vector2>();
+                    for (int u = 1; u < lat - 1 && dummies.Count < 3; u += 3) if (Take(u, far - 1)) { var p = T(u, far - 1); Breakables.Dummy(p, FaceDoor); dummies.Add(p); }
+                    Vector2 tgt = default; bool hasT = false;
+                    if (lat >= 6 && TakeAll((lat - 2, far), (lat - 3, far))) { tgt = T(lat - 2.5f, far); Breakables.Target(tgt, FaceDoor); hasT = true; }
+                    float rackRot = door == 's' ? 90f : door == 'n' ? -90f : door == 'w' ? 0f : 180f;
+                    if (TakeAll((0, mid), (0, mid + 1))) { var rp = (T(0, mid) + T(0, mid + 1)) / 2f; if (rnd.Next(2) == 0) Breakables.Rack(rp, rackRot); else Breakables.RackX(rp, rackRot); }
+                    if (TakeAll((0, mid + 3), (0, mid + 4))) { var rp = (T(0, mid + 3) + T(0, mid + 4)) / 2f; Breakables.RackX(rp, rackRot); }
+                    for (int v = 1; v < far - 2; v += 2) if (TakeAll((lat - 1, v), (lat - 1, v + 1))) Breakables.Bench((T(lat - 1, v) + T(lat - 1, v + 1)) / 2f, FaceDoor + 90f);
+                    foreach (var d in dummies.Take(3))
+                    {
+                        var at = d + (T(0, 0) - T(0, 1)) * 1.3f;
+                        Activity.Give(Spearman.Spawn(at), Activity.Kind.Train, d);
+                    }
+                    if (hasT) Activity.Give(Crossbowman.Spawn(T(lat - 2.5f, 1)), Activity.Kind.Shoot, tgt);
+                    break;
+                }
+            }
         }
 
         static void Webs(int n)
@@ -542,6 +728,7 @@ namespace OccultSanctum
         /// the worn red rug in the middle
         static void Rug()
         {
+            return;                                                         // (the user: no carpets)
             if (lat < 3 || dep < 4) return;
             var rug = Builder.Sr("occ_rug", T((lat - 1) / 2f, (dep - 1) / 2f), Builder.floorLayer, Builder.floorOrder + 2, Builder.floorMat ?? Builder.litMat);
             rug.transform.rotation = Quaternion.Euler(0, 0, door == 's' || door == 'n' ? 0f : 90f);
@@ -550,6 +737,7 @@ namespace OccultSanctum
         /// a red runner from the door to the far wall
         static void Runner()
         {
+            return;                                                         // (the user: no carpets)
             int u = lat / 2;
             for (int v = 0; v < dep - 1; v++)
             {

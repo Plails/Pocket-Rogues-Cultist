@@ -41,6 +41,7 @@ namespace OccultSanctum
             mob.lvl = Mathf.Max(1, Generation.GetRandomMobLvl() + 1);
             mob.Init();
             Dress(go, mob);
+            Sizer.Fit(go, Sizer.Cultist);                                             // as big as the hero (the user)
             var ai = go.GetComponent<AIController>();
             if (ai != null) try { GameManager.Instance.AddMob(ai); } catch { }
             return mob;
@@ -71,7 +72,7 @@ namespace OccultSanctum
             try { mob.creatureLocalizedName = "Sanctum/Cultist"; } catch { }
             mob.creatureID = Bestiary.CultistId;
             Human.Apply(mob);                                                      // a man's voice, red blood                                    // his kills count as a cultist's in the bestiary
-            mob.customPreviewSprite = Art.Pivoted("cult_preview", new Vector2(0.5f, 0.5f), 36f);
+            mob.customPreviewSprite = Snapshot.Of(go, mob.creatureID, Art.Pivoted("cult_preview", new Vector2(0.5f, 0.5f), 36f));   // taken from himself (the user: the hand-made ones were crooked)
         }
     }
 
@@ -94,7 +95,9 @@ namespace OccultSanctum
             try
             {
                 var comp = source as Component;
-                if (comp == null || comp.GetComponentInParent<CultistTag>() == null && comp.GetComponentInParent<ElderTag>() == null) return;
+                if (comp == null || comp.GetComponentInParent<CultistTag>() == null && comp.GetComponentInParent<ElderTag>() == null && comp.GetComponentInParent<MagusTag>() == null) return;
+                // the archmage's sphere: the cultist's, only wider (the user) - a bigger sphere that strikes a wider path
+                if (comp.GetComponentInParent<MagusTag>() != null) __instance.transform.localScale = __instance.transform.localScale * Magus.BoltWidth;
                 foreach (var sr in __instance.GetComponentsInChildren<SpriteRenderer>(true))
                 {
                     string n = ((sr.sprite != null ? sr.sprite.name : "") + "|" + sr.gameObject.name).ToLowerInvariant();

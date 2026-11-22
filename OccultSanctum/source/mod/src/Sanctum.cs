@@ -236,8 +236,8 @@ namespace OccultSanctum
                 {
                     if (!Lay(y)) continue;
                     bool startHere = y > 0 && !Lay(y - 1), endHere = !Lay(y + 1);
-                    var t = Builder.Sr(endHere || startHere ? "occ_carpet_end" : "occ_carpet", W(gx, y), Builder.floorLayer, Builder.floorOrder + 3, FloorMat);
-                    if (startHere && !endHere) t.transform.rotation = Quaternion.Euler(0, 0, 180f);
+                    // (the user, 2026-11-22: no bits of carpet - the hall's carpet was cut short by the circle) the lane
+                    // to the altar is kept clear, no carpet drawn
                     Mark(gx - 1, y, 3, 1);
                 }
                 Breakables.Altar(W(gx, top - 0.4f)); Mark(gx - 1, top - 1, 3, 2);
@@ -434,7 +434,7 @@ namespace OccultSanctum
             });
             Safe("side rooms", () =>
             {
-                var small = new List<string> { "library", "range", "barracks", "shrine", "cell", "store", "study", "armory", "forge", "tomb", "alchemy", "dormitory", "execution",
+                var small = new List<string> { "library", "range", "barracks", "shrine", "cell", "store", "study", "armory", "forge", "tomb", "alchemy", "execution",
                                                "sanctuary", "ossuary", "scriptorium", "gallery", "summoning", "guardpost", "pantry", "guardpost", "range" }.OrderBy(_ => rnd.Next()).ToList();
                 SideRoom.Rooms.Clear();
                 var large = new List<string> { "warehouse", "training", "research", "refectory", "prison", "council", "scriptorium", "gallery", "ossuary", "summoning", "training" }.OrderBy(_ => rnd.Next()).ToList();
@@ -442,7 +442,10 @@ namespace OccultSanctum
                 {
                     var pool = r.width * r.height >= 56 ? large : small;
                     if (pool.Count == 0) pool = small.Count > 0 ? small : new List<string> { "store" };
-                    string role = pool[rnd.Next(pool.Count)];
+                    // only what fits: a training room, a range, a guard post... in a closet came out a single target on
+                    // the floor (the user) - such rooms want room to drill in
+                    var fits = pool.Where(x => SideRoom.Fits(x, r)).ToList();
+                    string role = fits.Count > 0 ? fits[rnd.Next(fits.Count)] : SideRoom.Tiny[rnd.Next(SideRoom.Tiny.Length)];
                     pool.Remove(role);
                     SideRoom.Furnish(r, role, L, rnd);
                 }
@@ -456,6 +459,17 @@ namespace OccultSanctum
                 if (fr.Count == 0) return;
                 var t = fr.OrderBy(q => Mathf.Abs((W(q.x, q.y) - heart).magnitude - 3f)).First(); Mark(t.x - 1, t.y - 1, 3, 3);
                 Champion.Place(W(t.x, t.y), heart, rnd);
+            });
+            Safe("archmage", () =>
+            {
+                // the second champion, the archmage, with two cultists: a free spot farther out from the hall's heart
+                Vector2 heart = W(L.GateX, (L.ShiftY + L.TopAt(L.GateX)) / 2f);
+                var fr = spotsLeft();
+                // (the user could not find him: the hall was full and he was left out) - no free spot: any floor will do
+                if (fr.Count == 0) { for (int x = 1; x < L.W - 1; x++) for (int y = L.ShiftY + 2; y < L.H - 1; y++) if (Fl(x, y) && Fl(x - 1, y) && Fl(x + 1, y) && Fl(x, y - 1) && Fl(x, y + 1)) fr.Add(new Vector2Int(x, y)); }
+                if (fr.Count == 0) { SanctumPlugin.Log.LogWarning("Sanctum: no floor at all for the archmage"); return; }
+                var t = fr.OrderBy(q => Mathf.Abs((W(q.x, q.y) - heart).magnitude - 6f)).First(); Mark(t.x - 1, t.y - 1, 3, 3);
+                Magus.Place(W(t.x, t.y), heart, rnd);
             });
             Safe("passages", Unjam);
             Safe("path grid", PathBlock.Install);
@@ -656,7 +670,7 @@ namespace OccultSanctum
                     var c = holy.Dequeue(); Vector2 p = c.transform.position; Vector2 dir = (heart - p).sqrMagnitude > 0.01f ? (heart - p).normalized : Vector2.down;
                     Put(m, p + dir * 1.3f); Activity.Give(m, Activity.Kind.Pray, p); continue;
                 }
-                if (!cult && !spear && !targetSet && TryWall(2, out var tp, out var tr, 0.6f))
+                if (false && !cult && !spear && !targetSet && TryWall(2, out var tp, out var tr, 0.6f))   // (no target in the hall: they shoot in the ranges)
                 {
                     targetSet = true;
                     float a = (tr + 270f) * Mathf.Deg2Rad;                                   // in front of the target, a few tiles off
@@ -781,11 +795,49 @@ namespace OccultSanctum
             rockParticles = br != null ? br.DestroyedParticles : null;
             var st = Prefabs.Cont("TombStatue_SpikesSafe")?.GetComponent<Container>() ?? Prefabs.Cont("TombStatue_Spikes")?.GetComponent<Container>();
             rockSound = st != null ? st.DestroySound : null;
+            // (a friend of the user: "add sounds to the sanctum's things breaking") the sounds of the game's own things,
+            // by what they are made of: wood (boxes, barrels), stone (statues), iron, clay (bowls, pots)
+            Pick("wood", "box", "barrel", "crate", "table", "chair", "wood", "shelf");
+            Pick("stone", "statue", "stone", "tomb", "rock", "brazier");
+            Pick("iron", "iron", "metal", "armor", "cage", "anvil", "chain", "grate", "lamp");
+            Pick("wax", "bowl", "pot", "jar", "vase", "urn", "candle", "skull");
+            foreach (var kv in sounds) SanctumPlugin.Log.LogInfo("Sanctum: " + kv.Key + " breaks with the sound of " + kv.Value.from);
+        }
+
+        class Snd { public AudioClip one; public AudioClip[] many, hit; public string from; }
+        static readonly Dictionary<string, Snd> sounds = new Dictionary<string, Snd>();
+
+        static void Pick(string kind, params string[] words)
+        {
+            try
+            {
+                foreach (var w in words)
+                    foreach (var c in Resources.LoadAll<Container>(""))
+                    {
+                        if (c == null || c.name.IndexOf(w, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                        bool has = c.DestroySound != null || (c.DestroySoundsArray != null && c.DestroySoundsArray.Any(a => a != null));
+                        if (!has) continue;
+                        sounds[kind] = new Snd { one = c.DestroySound, many = c.DestroySoundsArray, hit = c.sfx_OnHit, from = c.name };
+                        return;
+                    }
+            }
+            catch (Exception e) { SanctumPlugin.Log.LogWarning("Sanctum: sounds of " + kind + ": " + e.Message); }
+        }
+
+        static void Sound(Container cont, string kind)
+        {
+            if (!sounds.TryGetValue(kind, out var sn) && !sounds.TryGetValue("wood", out sn)) return;
+            cont.DestroySound = sn.one;
+            cont.DestroySoundsArray = sn.many != null ? sn.many.Where(a => a != null).ToArray() : new AudioClip[0];
+            if ((cont.sfx_OnHit == null || cont.sfx_OnHit.Length == 0) && sn.hit != null && sn.hit.Length > 0) cont.sfx_OnHit = sn.hit;
         }
 
         static Sprite[] Sprites(params string[] names) => names.Select(Art.Get).Where(s => s != null).ToArray();
 
         /// a heavy thing stands fast: it cannot be pushed about, only broken
+        /// square to the walls (the user: tables and shelves stood askew)
+        public static float Square(float rot) => Mathf.Round(rot / 90f) * 90f;
+
         public static void Pin(Container c)
         {
             if (c == null) return;
@@ -793,9 +845,36 @@ namespace OccultSanctum
                 if (rb != null) { rb.velocity = Vector2.zero; rb.bodyType = RigidbodyType2D.Static; }
         }
 
+        /// (the user: a table stood with its long side up and down where it should lie across the room) a long thing lies
+        /// along the two tiles it was given: centred between two tiles side by side -> lengthwise left-right, between two
+        /// tiles one above the other -> up-down; turned the quarter that has its front (its upper edge) towards the
+        /// open floor, not the wall
+        static float AlongItsTiles(Vector2 pos, float rot, Vector2? box)
+        {
+            if (!box.HasValue || box.Value.x < box.Value.y * 1.4f) return rot;
+            float fx = Mathf.Abs((pos.x - Room.O.x) - Mathf.Round(pos.x - Room.O.x)), fy = Mathf.Abs((pos.y - Room.O.y) - Mathf.Round(pos.y - Room.O.y));
+            bool across = fx > 0.3f && fy < 0.2f, upDown = fy > 0.3f && fx < 0.2f;
+            if (!across && !upDown) return rot;
+            float r = Square(rot);
+            bool lying = Mathf.Abs(Mathf.DeltaAngle(r, 0f)) < 1f || Mathf.Abs(Mathf.DeltaAngle(r, 180f)) < 1f;   // long side left-right now
+            if (across == lying) return r;
+            float a = r - 90f, b = r + 90f;
+            return Open(pos, b) > Open(pos, a) ? b : a;
+        }
+
+        /// how much floor lies before a thing's front (its upper edge, turned by rot)
+        static int Open(Vector2 pos, float rot)
+        {
+            Vector2 up = new Vector2(-Mathf.Sin(rot * Mathf.Deg2Rad), Mathf.Cos(rot * Mathf.Deg2Rad));
+            int n = 0;
+            for (int k = 1; k <= 3; k++) if (Room.In(pos + up * k)) n++;
+            return n;
+        }
+
         static Container Make(string template, string art, Vector2 pos, float rot, float hp, string[] debris, bool stone, Vector2? box, float radius, out SpriteRenderer sr)
         {
             LookUp();
+            rot = AlongItsTiles(pos, rot, box);
             sr = null;
             var prefab = Prefabs.Cont(template);
             var go = Builder.Spawn(prefab, pos, rot);
@@ -811,20 +890,23 @@ namespace OccultSanctum
             if (box.HasValue) cont.gameObject.AddComponent<BoxCollider2D>().size = box.Value;
             else cont.gameObject.AddComponent<CircleCollider2D>().radius = radius;
             cont.hp = hp;
+            cont.playDamageAnimation = true;                                                    // (the user, 2026-11-21: every thing jerks a little when struck, like the game's own)
             cont.DestroyObject_Sprites = Sprites(debris);
             cont.damageSprites?.Clear();
             cont.hideUnderWaterSprites?.Clear();
             cont.OnDamageObject_Sprites = new Sprite[0];
+            string kind = debris != null && debris.Length > 0 ? (debris[0].Contains("iron") ? "iron" : debris[0].Contains("stone") ? "stone" : debris[0].Contains("wax") ? "wax" : "wood") : "wood";
+            Sound(cont, kind);
             if (stone)
             {
                 if (rockParticles != null) { cont.DestroyedParticles = rockParticles; cont.DestroyedParticles2 = null; }
-                if (rockSound != null) { cont.DestroySound = rockSound; cont.DestroySoundsArray = new AudioClip[0]; }
+                if (kind == "stone" && rockSound != null) { cont.DestroySound = rockSound; cont.DestroySoundsArray = new AudioClip[0]; }
             }
             return cont;
         }
 
-        public static void Table(int v, Vector2 pos, float rot)
-            => Make("Box", "occ_table_" + v, pos, rot, 3f, new[] { "occ_wood_destr_0", "occ_wood_destr_1", "occ_wood_destr_2" }, false, new Vector2(1.85f, 1.05f), 0f, out _);
+        public static void Table(int v, Vector2 pos, float rot)                                // square to the walls and standing fast: nobody shoves it askew
+            => Pin(Make("Box", "occ_table_" + v, pos, Square(rot), 3f, new[] { "occ_wood_destr_0", "occ_wood_destr_1", "occ_wood_destr_2" }, false, new Vector2(1.85f, 1.05f), 0f, out _));
 
         public static void Altar(Vector2 pos)
             => Pin(Make("Box", "occ_altar", pos, 0f, 8f, new[] { "occ_stone_destr_0", "occ_stone_destr_1", "occ_stone_destr_2" }, true, new Vector2(2.45f, 1.05f), 0f, out _));
@@ -836,7 +918,7 @@ namespace OccultSanctum
         /// asleep and cannot be hurt; break the cage and it comes out and fights
         public static Container Cage(string kind, Vector2 pos)
         {
-            var cont = Make("Box", "occ_cage", pos, 0f, 5f, new[] { "occ_iron_destr_0", "occ_iron_destr_1", "occ_iron_destr_2" }, true, new Vector2(1.35f, 1.35f), 0f, out var sr);
+            var cont = Make("Box", "occ_cage", pos, 0f, 1f, new[] { "occ_iron_destr_0", "occ_iron_destr_1", "occ_iron_destr_2" }, true, new Vector2(1.35f, 1.35f), 0f, out var sr);
             if (cont == null) return null;
             Pin(cont);                                                                          // a cage stands fast: break it, do not push it
             if (sr != null) { sr.sortingLayerID = TopCreatureLayer(); sr.sortingOrder = 400; }      // the bars in front of whoever is inside
@@ -856,11 +938,12 @@ namespace OccultSanctum
         }
 
         /// a bookcase against the wall (rot: its back to the wall)
-        public static void Shelf(Vector2 pos, float rot)
-            => Pin(Make("Box", "occ_shelf", pos, rot, 4f, new[] { "occ_wood_destr_0", "occ_wood_destr_1", "occ_wood_destr_2" }, false, new Vector2(2.05f, 0.65f), 0f, out _));
+        public static void Shelf(Vector2 pos, float rot) { }                              // no bookcases at all (the user)
+        static void ShelfUnused(Vector2 pos, float rot)
+            => Pin(Make("Box", "occ_shelf", pos, Square(rot), 4f, new[] { "occ_wood_destr_0", "occ_wood_destr_1", "occ_wood_destr_2" }, false, new Vector2(2.05f, 0.65f), 0f, out _));
 
         public static void Bench(Vector2 pos, float rot)
-            => Make("Box", "occ_bench", pos, rot, 2f, new[] { "occ_wood_destr_0", "occ_wood_destr_2" }, false, new Vector2(1.8f, 0.45f), 0f, out _);
+            => Pin(Make("Box", "occ_bench", pos, Square(rot), 2f, new[] { "occ_wood_destr_0", "occ_wood_destr_2" }, false, new Vector2(1.8f, 0.45f), 0f, out _));
 
         /// a stone fireplace against the wall with a fire in it; smashed, the fire goes out
         public static void Fireplace(Vector2 pos, float rot)
@@ -876,6 +959,7 @@ namespace OccultSanctum
         public static void Candelabra(Vector2 pos)
         {
             var cont = Make("CryptBowl", "occ_candelabra", pos, 0f, 2f, new[] { "occ_iron_destr_0", "occ_wax_destr_0", "occ_wax_destr_1" }, false, null, 0.42f, out var sr);
+            Pin(cont);                                                                          // a tall iron stand: it stands fast (the user)
             Flame(cont, sr, pos, "occ_candelabra_fl_", 3, 0.13f);
         }
 
@@ -889,17 +973,18 @@ namespace OccultSanctum
 
         /// a hooded cultist of stone on a plinth, facing the lane
         public static void Statue(Vector2 pos, float rot)
-            => Pin(Make("Box", "occ_statue", pos, rot, 7f, new[] { "occ_stone_destr_0", "occ_stone_destr_1", "occ_stone_destr_2" }, true, new Vector2(1.05f, 1.05f), 0f, out _));
+            => Pin(Make("Box", "occ_statue", pos, Square(rot), 7f, new[] { "occ_stone_destr_0", "occ_stone_destr_1", "occ_stone_destr_2" }, true, new Vector2(1.05f, 1.05f), 0f, out _));
 
         /// a sacrifice slab with chains
         public static void Sacrifice(Vector2 pos)
             => Pin(Make("Box", "occ_sacrifice", pos, 0f, 8f, new[] { "occ_stone_destr_0", "occ_stone_destr_1", "occ_iron_destr_1" }, true, new Vector2(1.9f, 0.95f), 0f, out _));
 
         public static void Lectern(Vector2 pos)
-            => Make("Box", "occ_lectern", pos, 0f, 2f, new[] { "occ_wood_destr_0", "occ_wood_destr_1" }, false, new Vector2(0.85f, 0.6f), 0f, out _);
+            => Pin(Make("Box", "occ_lectern", pos, 0f, 2f, new[] { "occ_wood_destr_0", "occ_wood_destr_1" }, false, new Vector2(0.85f, 0.6f), 0f, out _));
 
         /// a black obelisk with a dull red glow round its foot
-        public static void Obelisk(Vector2 pos)
+        public static void Obelisk(Vector2 pos) { }                                       // no blood crystal at all (the user)
+        static void ObeliskUnused(Vector2 pos)
         {
             var cont = Make("Box", "occ_obelisk", pos, 0f, 9f, new[] { "occ_stone_destr_0", "occ_stone_destr_1", "occ_stone_destr_2" }, true, null, 0.45f, out var sr);
             if (cont == null) return;
@@ -940,8 +1025,9 @@ namespace OccultSanctum
             => Pin(Make("Box", "occ_rack_xbow", pos, rot, 5f, new[] { "occ_wood_destr_0", "occ_wood_destr_1", "occ_iron_destr_0" }, false, new Vector2(1.65f, 0.5f), 0f, out _));
 
         /// a bedding rolled out on the floor
-        public static void Bedroll(Vector2 pos, float rot)
-            => Make("Box", "occ_bedroll", pos, rot, 1f, new[] { "occ_wood_destr_2" }, false, new Vector2(0.55f, 1.15f), 0f, out _);
+        /// a bed (the user: the old beddings looked awful): a wooden frame, a mattress, a pillow, a red blanket
+        public static Container Bedroll(Vector2 pos, float rot)
+        { var c = Make("Box", "occ_bedroll", pos, Square(rot), 2f, new[] { "occ_wood_destr_0", "occ_wood_destr_2" }, false, new Vector2(0.8f, 1.7f), 0f, out _); Pin(c); return c; }
 
         /// an unseen prop that takes the blows for a breakable stretch of wall (its picture is the wall itself)
         public static Container Hidden(Vector2 pos)

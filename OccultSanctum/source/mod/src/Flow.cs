@@ -140,11 +140,7 @@ namespace OccultSanctum
                     SanctumPlugin.Log.LogInfo("Into the sanctum from " + g.FloorKey);
                     return true;
                 }
-                if (!Gate.Cleared())
-                {
-                    try { PopupTextManager.Instance.CreatePopupText_WorldPosition(__instance.transform.position, Texts.Get("Sanctum/NotCleared"), Color.red); } catch { }
-                    return false;
-                }
+                // (a friend of the user asked why the way out was shut until the sanctum was cleared: it is always open now)
                 Flow.Going = false;
                 SanctumPlugin.Log.LogInfo("Out of the sanctum, back to " + PlayerPrefs.GetString("prevLocation"));
                 return true;

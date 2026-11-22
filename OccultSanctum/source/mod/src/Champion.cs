@@ -5,27 +5,30 @@ using UnityEngine;
 
 namespace OccultSanctum
 {
-    /// The cult's champion (Чемпион культа), after the user's concept: the game's guardsman warrior (its shapes, its moves
-    /// and its mind) recoloured - black robe, steel pauldrons with pale spikes, a grey tabard, a pale bald head, dark
-    /// sleeves and steel gauntlets, a big blackened morningstar; standing a head taller than the guardsman. He is of the
-    /// game's "champion" rank (purple name, more loot) and much tougher, and goes the rounds of the whole sanctum with
+    /// The cult's general (Чемпион культа), after the user's concept, drawn whole by hand (general_art.py): a big man in a
+    /// black robe with a grey tabard, blackened steel pauldrons with long pale spikes, a pale bald scarred head, dark
+    /// sleeves with steel bracers, iron gauntlets, black boots and a huge two-handed spiked morningstar. Not a recoloured
+    /// monster: every picture is new; only the bones and the moves are the game's two-handed rig (the one its
+    /// two-handed fighters use - idle, walk, the overhead two-handed blow and the power blow), so he holds the mace in
+    /// both hands and brings it down with both. Of the game's "champion" rank (purple name, more loot), much tougher,
+    /// much bigger than the others (1.45); a man (voice, red blood, not undead). Goes the rounds of the whole sanctum with
     /// two soldiers behind him.
     public static class Champion
     {
         public const string Id = "OccultChampion";
-        /// taken out for now (the user): he does not appear and is not in the bestiary
-        public const bool Enabled = false;
-        public const float Size = 1f, HpMult = 2.2f;          // (the guardsman is 0.85 in the game: the champion stands a head taller)
+        public const bool Enabled = true;
+        public const float HpMult = 2.2f, DmgMult = 1.35f;                       // (his size: Sizer.General)
         static GameObject prefab;
         static bool looked;
 
+        /// the game's two-handed rig: the skeleton axeman's bones and moves (his pictures all replaced)
         static GameObject Prefab()
         {
             if (!looked)
             {
                 looked = true;
-                prefab = Prisoner.FindMob(new[] { "Guardsman_Warrior", "GuardsmanWarrior" }, "Guardsman", "Warrior");
-                SanctumPlugin.Log.LogInfo("Sanctum: the champion is made from " + (prefab != null ? prefab.name : "nothing (no ogre warrior found)"));
+                prefab = Prisoner.FindMob(new[] { "SkeletonAxeman", "Skeleton_Axeman" }, "Axeman");
+                SanctumPlugin.Log.LogInfo("Sanctum: the general's rig is " + (prefab != null ? prefab.name : "nothing (no two-handed rig found)"));
             }
             return prefab;
         }
@@ -47,50 +50,52 @@ namespace OccultSanctum
             mob.lvl = Mathf.Max(1, Generation.GetRandomMobLvl() + 2);
             mob.Init();
             try { mob.HP_max = mob.HP_max * HpMult; mob.HP_cur = mob.HP_max; } catch { }
-            go.transform.localScale = Vector3.one * Size;                             // (after Init: not the game's random size)
+            try { mob.attackDamage = mob.attackDamage * DmgMult; } catch { }                 // his blows hit harder (the user)
+            go.transform.localScale = Vector3.one;                                    // (after Init: not the game's random size)
+            Sizer.FitChampion(go);                                                    // as big as the game's champions, always the same (the user)
+            go.AddComponent<WarCry>();                                                // the zombie guardian's rage on his friends                                             // big next to the crossbowmen (the user)
             Dress(go, mob);
             var ai = go.GetComponent<AIController>();
             if (ai != null) try { GameManager.Instance.AddMob(ai); } catch { }
-            SanctumPlugin.Log.LogInfo("Sanctum: the champion stands at " + pos + " (HP " + mob.HP_max + ")");
+            SanctumPlugin.Log.LogInfo("Sanctum: the general stands at " + pos + " (HP " + mob.HP_max + ")");
             return mob;
         }
 
         static void Dress(GameObject go, Mob mob)
         {
-            go.name = "CultChampion";
+            go.name = "CultGeneral";
             if (go.GetComponent<ChampionTag>() == null) go.AddComponent<ChampionTag>();
-            // the guardsman's own parts recoloured after the concept (same shapes and moves): black robe, steel pauldrons
-            // with pale spikes, a grey tabard, a pale bald head, dark sleeves, steel gauntlets, a blackened morningstar
             foreach (var sr in go.GetComponentsInChildren<SpriteRenderer>(true))
             {
                 string n = sr.gameObject.name;
-                if (n == "HandEquip_L") { sr.sprite = null; sr.enabled = false; continue; }               // no shield, nothing in the left hand
-                if (n == "HandEquip_R")                                                                     // the morningstar, bigger
-                {
-                    var m = Art.Part("champ_g_mace", sr.sprite); if (m != null) sr.sprite = m;
-                    sr.transform.localScale = sr.transform.localScale * 1.35f;
-                    continue;
-                }
-                string art = n == "Body" ? "champ_g_body" : n == "Head" ? "champ_g_head" : n.StartsWith("UpperArm", StringComparison.Ordinal) ? "champ_g_upperarm"
-                           : n.StartsWith("Arm_", StringComparison.Ordinal) ? "champ_g_forearm" : n.StartsWith("Hand_", StringComparison.Ordinal) ? "champ_g_hand"
-                           : n.StartsWith("Leg_", StringComparison.Ordinal) ? "champ_g_leg" : n == "Hero_warrior" ? "champ_g_preview" : null;
+                if (n == "HandEquip_L") { sr.sprite = null; continue; }                                   // both hands are on the mace
+                if (n == "Hero_warrior") { var pv = Art.Pivoted("gen_preview", new Vector2(0.5f, 0.5f), 96f); if (pv != null) sr.sprite = pv; continue; }
+                // the arms: the game's own arm shapes for this two-handed rig (its two-handed berserker's), each at its
+                // own pivot, twice the pixels - so they sit on the joints and close round the haft like the game's own
+                Sprite armS = n.StartsWith("UpperArm", StringComparison.Ordinal) ? Art.Pivoted("gen_upperarm", new Vector2(0.5f, 5f / 12f), 42f)
+                            : n.StartsWith("Arm_", StringComparison.Ordinal) ? Art.Pivoted("gen_forearm", new Vector2(1f / 3f, 0.25f), 42f)
+                            : n.StartsWith("Hand_", StringComparison.Ordinal) ? Art.Pivoted("gen_hand", new Vector2(0.5f, 0.4f), 42f) : null;
+                if (armS != null) { sr.sprite = armS; sr.color = Color.white; continue; }
+                string art = n == "Body" ? "gen_body" : n == "Head" ? "gen_head" : n == "HandEquip_R" ? "gen_mace"
+                           : n.StartsWith("Leg_", StringComparison.Ordinal) ? "gen_leg" : null;
                 if (art == null) continue;
-                var s = Art.Part(art, sr.sprite);
-                if (s != null) sr.sprite = s;
+                var s = Art.PartK(art, sr.sprite, 1f);                                // the rig's own size: his pixels as big as everyone's (the user)
+                if (s != null) { sr.sprite = s; sr.color = Color.white; }
             }
-            try { var dead = Art.Pivoted("champ_dead", new Vector2(0.5f, 0.5f), 28f); if (dead != null) mob.deadBodySprites = new[] { dead }; } catch { }
+            foreach (var lr in go.GetComponentsInChildren<LineRenderer>(true)) { var c = new Color(0.07f, 0.06f, 0.08f, 1f); lr.startColor = c; lr.endColor = c; }   // the legs drawn by lines: black, not bone
+            // his corpse drawn anew like the game's corpses: on his back, arms flung out, the mace by him (gen_dead_art.py)
+            try { var dead = Art.Pivoted("gen_dead", new Vector2(0.5f, 0.5f), 64f); if (dead != null) mob.deadBodySprites = new[] { dead }; } catch { }
             try { mob.creatureLocalizedName = "Sanctum/Champion"; } catch { }
             mob.creatureID = Id;
             Human.Apply(mob);
-            mob.customPreviewSprite = Art.Pivoted("champ_g_preview", new Vector2(0.5f, 0.5f), 34f);
+            try { var d = Human.DonorMob(); if (d != null) mob.mobClass = d.mobClass; } catch { }      // a man, not undead
+            mob.customPreviewSprite = Snapshot.Of(go, mob.creatureID, Art.Pivoted("gen_preview", new Vector2(0.5f, 0.5f), 68f), 1.7f);   // big, like the game's bosses (the user)   // taken from himself (the user: the hand-made ones were crooked)
             var ai = go.GetComponent<AIController>();
             if (ai != null)
             {
-                // a fighter with his mace: no shield blocks, no ramming runs or pushing charges, nothing thrown
-                foreach (var bh in new[] { AIController.BEHAVIORS.USE_SHIELD, AIController.BEHAVIORS.RUN_ATTACK, AIController.BEHAVIORS.CUSTOM_RUN, AIController.BEHAVIORS.PUSH_ATTACK,
-                                           AIController.BEHAVIORS.COMBAT_DISTANCE, AIController.BEHAVIORS.STRENGTH_DISTANCE, AIController.BEHAVIORS.FIRE_ON_DISTANCE, AIController.BEHAVIORS.MULTIARCH })
+                // he fights in close with his two-handed blows: no thrown things, no shooting
+                foreach (var bh in new[] { AIController.BEHAVIORS.FIRE_ON_DISTANCE, AIController.BEHAVIORS.MULTIARCH, AIController.BEHAVIORS.MULTIARCH_HUNTER, AIController.BEHAVIORS.STRENGTH_DISTANCE })
                     ai.RemoveBehavior(bh);
-                if (!ai.HasBehavior(AIController.BEHAVIORS.COMBAT_MELEE)) ai.AddBehavior(AIController.BEHAVIORS.COMBAT_MELEE);
             }
         }
 

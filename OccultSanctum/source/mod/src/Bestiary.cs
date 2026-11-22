@@ -15,7 +15,7 @@ namespace OccultSanctum
         public static Locations Loc => (Locations)LocId;
         public const string CultistId = "OccultCultist", DevilId = "OccultDevil";
         static GameObject holder;
-        static Mob cultistEntry, devilEntry, xbowEntry, spearEntry, elderEntry, champEntry;
+        static Mob cultistEntry, devilEntry, xbowEntry, spearEntry, elderEntry, champEntry, magusEntry;
 
         public static LocationData Data => new LocationData(Loc, SanctumPlugin.CfgFloorFrom.Value, SanctumPlugin.CfgFloorTo.Value);
 
@@ -41,7 +41,7 @@ namespace OccultSanctum
             return mob;
         }
 
-        public static void Prepare(List<Mob> mobs)
+        public static void Prepare(List<Mob> mobs, List<Mob> bosses = null)
         {
             if (cultistEntry == null) cultistEntry = Entry(Cultist.PrefabForBestiary(), CultistId, Cultist.DressForBestiary);
             if (devilEntry == null) devilEntry = Entry(Devil.PrefabForBestiary(), DevilId, Devil.DressForBestiary);
@@ -49,7 +49,19 @@ namespace OccultSanctum
             if (spearEntry == null) spearEntry = Entry(Spearman.PrefabForBestiary(), Spearman.Id, Spearman.DressForBestiary);
             if (elderEntry == null) elderEntry = Entry(Elder.PrefabForBestiary(), Elder.Id, Elder.DressForBestiary);
             if (champEntry == null && Champion.Enabled) champEntry = Entry(Champion.PrefabForBestiary(), Champion.Id, Champion.DressForBestiary);
-            foreach (var e in new[] { cultistEntry, devilEntry, xbowEntry, spearEntry, elderEntry, champEntry }) if (e != null && !mobs.Contains(e)) mobs.Add(e);
+            foreach (var e in new[] { cultistEntry, devilEntry, xbowEntry, spearEntry, elderEntry }) if (e != null && !mobs.Contains(e)) mobs.Add(e);
+            // the general is a champion: on the bosses' page with the game's own champions (the user)
+            if (magusEntry == null) magusEntry = Entry(Magus.PrefabForBestiary(), Magus.Id, Magus.DressForBestiary);
+            if (magusEntry != null)
+            {
+                if (bosses != null) { mobs.Remove(magusEntry); if (!bosses.Contains(magusEntry)) bosses.Add(magusEntry); }   // a champion: with the bosses
+                else if (!mobs.Contains(magusEntry)) mobs.Add(magusEntry);
+            }
+            if (champEntry != null)
+            {
+                if (bosses != null) { mobs.Remove(champEntry); if (!bosses.Contains(champEntry)) bosses.Add(champEntry); }
+                else if (!mobs.Contains(champEntry)) mobs.Add(champEntry);
+            }
             // the cages' prisoners live here too
             foreach (var kind in new[] { "skel", "rot", "zomb" })
             {
@@ -68,7 +80,7 @@ namespace OccultSanctum
     {
         static void Prefix(Your.Namespace.Here.UniqueStringHereToAvoidNamespaceConflicts.Lists.BasicListAdapterBestiary __instance)
         {
-            try { Bestiary.Prepare(__instance.Mobs); }
+            try { Bestiary.Prepare(__instance.Mobs, __instance.Bosses); }
             catch (Exception e) { SanctumPlugin.Log.LogWarning("Sanctum bestiary: " + e.Message); }
         }
     }
