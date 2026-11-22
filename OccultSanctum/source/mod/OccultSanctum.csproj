@@ -23,6 +23,8 @@
     <Reference Include="UnityEngine.TilemapModule"><HintPath>$(Managed)\UnityEngine.TilemapModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.GridModule"><HintPath>$(Managed)\UnityEngine.GridModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.AudioModule"><HintPath>$(Managed)\UnityEngine.AudioModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UnityWebRequestModule"><HintPath>$(Managed)\UnityEngine.UnityWebRequestModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UnityWebRequestAudioModule"><HintPath>$(Managed)\UnityEngine.UnityWebRequestAudioModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.ParticleSystemModule"><HintPath>$(Managed)\UnityEngine.ParticleSystemModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Drawing"><HintPath>$(Managed)\Drawing.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="PackageTools"><HintPath>$(Managed)\PackageTools.dll</HintPath><Private>false</Private></Reference>

@@ -14,12 +14,14 @@ namespace OccultSanctum
         bool done;
         float next;
 
-        void OnEnable() { SceneManager.sceneLoaded += OnLoaded; }
+        void OnEnable() { SceneManager.sceneLoaded += OnLoaded; Music.Host = this; Music.Load(); }
+        bool kicked;
         void OnDisable() { SceneManager.sceneLoaded -= OnLoaded; }
-        void OnLoaded(Scene s, LoadSceneMode m) { done = false; try { Flow.OnSceneLoaded(s); } catch (Exception e) { SanctumPlugin.Log.LogError("Sanctum scene: " + e); } }
+        void OnLoaded(Scene s, LoadSceneMode m) { done = false; kicked = false; try { Flow.OnSceneLoaded(s); } catch (Exception e) { SanctumPlugin.Log.LogError("Sanctum scene: " + e); } }
 
         void Update()
         {
+            if (!kicked && Flow.InSanctum && GameManager.Instance != null && GameManager.Instance.Player_Mine() != null) { kicked = true; Music.Start(); }
             if (done || Time.unscaledTime < next) return;
             next = Time.unscaledTime + 0.25f;
             try { Tick(); }

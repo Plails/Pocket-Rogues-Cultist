@@ -177,14 +177,20 @@ namespace OccultSanctum
             foreach (var r in l.Rects) Take(r, 1);
             var anchors = new List<RectInt> { entry, hall, hall };
             int want = N(6, 10);
-            for (int tries = 0; tries < 200 && l.Side.Count < want; tries++)
+            for (int tries = 0; tries < 600 && l.Side.Count < want; tries++)
             {
                 var a = anchors[Rn.Next(anchors.Count)];
                 char s = "wensw e"[Rn.Next(7)];
                 if (s == ' ') s = Rn.Next(2) == 0 ? 'w' : 'e';
                 if ((s == 'n' || s == 's') && a.Equals(entry)) continue;
                 bool big = Rn.Next(4) == 0;                                          // now and then a big room: a store, a training hall
-                int rw = big ? N(8, 11) : N(4, 8), rh = big ? N(7, 9) : N(4, 7), len = N(4, 9), cw = Rn.Next(3) == 0 ? 3 : 2;   // corridors two or three tiles wide, never one
+                int rw = big ? N(8, 11) : N(5, 8), rh = big ? N(7, 9) : N(5, 8), len = N(4, 9), cw = Rn.Next(3) == 0 ? 3 : 2;   // corridors two or three tiles wide, never one
+                // (the user, 2026-11-22, screenshot: a room 3-4 deep with a corridor nearly its whole wall wide looked like
+                // a bulge of the corridor, its things in a strip) a room is at least 5 x 5, never a long thin strip, at
+                // least 5 deep from its door, and its door wall is 3 tiles longer than the corridor coming into it
+                if (Mathf.Max(rw, rh) > Mathf.Min(rw, rh) * 3 / 2 + 1) continue;
+                if (s == 'w' || s == 'e') { if (rw < 5 || rh < cw + 3) continue; }
+                else if (rh < 5 || rw < cw + 3) continue;
                 RectInt cor, room;
                 if (s == 'w' || s == 'e')
                 {
