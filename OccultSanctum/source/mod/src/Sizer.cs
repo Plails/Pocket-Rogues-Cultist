@@ -66,7 +66,9 @@ namespace OccultSanctum
         /// half again too wide and the cultists came out twice his size - the user's picture), so it is taken from what
         /// the user's pictures show (a cultist of the game's own size, body 0.40, stands as wide as the hero) and
         /// follows the hero's own scale by his shoulders (those are measured exactly: 0.30..0.32)
-        public static float HeroBody() => 0.40f * HeroSpan() / 0.31f;
+        /// (0.38.1, the sandbox: with a mage hero his shoulders read 0.46 and every cultist came out half again too big,
+        /// 0.54 instead of 0.36) - so the yardstick is the hero the user tuned the sizes on, the same for every class
+        public static float HeroBody() => 0.39f;
 
         static SpriteRenderer BodyOf(GameObject go)
         {

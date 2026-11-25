@@ -378,8 +378,8 @@ namespace OccultSanctum
                 for (int x = 0; x < L.W; x++) for (int y = L.ShiftY + 2; y < L.H; y++) if (Free(x, y)) spots.Add(new Vector2Int(x, y));
                 int hall = 0;
                 for (int x = 0; x < L.W; x++) for (int y = L.ShiftY; y < L.H; y++) if (Fl(x, y)) hall++;
-                int n = Mathf.Clamp(hall / 30, 3, 8), made = 0;
-                if (circle) n = Mathf.Max(n, rnd.Next(7, 10));          // enough of them for the ritual (it begins when five are left)
+                int n = Mathf.Clamp(hall / 50, 2, 5), made = 0;                 // (0.39.0 /38 2..6; 0.39.3, the user again: fewer mobs)
+                if (circle) n = Mathf.Max(n, rnd.Next(6, 8));          // enough of them for the ritual (it begins when five are left)
                 Ritual ritual = circle ? Builder.root.gameObject.AddComponent<Ritual>() : null;
                 if (ritual != null) ritual.Center = W(cc.x, cc.y);
                 for (int i = 0; i < n && spots.Count > 0; i++)
@@ -449,7 +449,7 @@ namespace OccultSanctum
                     var fits = pool.Where(x => SideRoom.Fits(x, r)).ToList();
                     string role = fits.Count > 0 ? fits[rnd.Next(fits.Count)] : SideRoom.Tiny[rnd.Next(SideRoom.Tiny.Length)];
                     pool.Remove(role);
-                    SideRoom.Furnish(r, role, L, rnd);
+                    SideRoom.Thinning = true; try { SideRoom.Furnish(r, role, L, rnd); } finally { SideRoom.Thinning = false; }
                 }
             });
             Safe("patrols", SpearPatrols);
@@ -854,6 +854,20 @@ namespace OccultSanctum
         static float AlongItsTiles(Vector2 pos, float rot, Vector2? box)
         {
             if (!box.HasValue || box.Value.x < box.Value.y * 1.4f) return rot;
+            // (0.39.0, the user's picture: an altar stood with its long side away from the wall it was set against)
+            // a long thing against ONE wall lies along that wall, whatever tiles it was put between
+            {
+                bool wN = !Room.In(pos + Vector2.up * 1.1f), wS = !Room.In(pos + Vector2.down * 1.1f), wE = !Room.In(pos + Vector2.right * 1.1f), wW = !Room.In(pos + Vector2.left * 1.1f);
+                bool horizWall = wN ^ wS, vertWall = wE ^ wW;
+                if (horizWall != vertWall)
+                {
+                    float rr = Square(rot);
+                    bool lyingNow = Mathf.Abs(Mathf.DeltaAngle(rr, 0f)) < 1f || Mathf.Abs(Mathf.DeltaAngle(rr, 180f)) < 1f;
+                    if (lyingNow == horizWall) return rr;                               // already along it
+                    float ra = rr - 90f, rb = rr + 90f;
+                    return Open(pos, rb) > Open(pos, ra) ? rb : ra;
+                }
+            }
             float fx = Mathf.Abs((pos.x - Room.O.x) - Mathf.Round(pos.x - Room.O.x)), fy = Mathf.Abs((pos.y - Room.O.y) - Mathf.Round(pos.y - Room.O.y));
             bool across = fx > 0.3f && fy < 0.2f, upDown = fy > 0.3f && fx < 0.2f;
             if (!across && !upDown) return rot;
@@ -945,7 +959,7 @@ namespace OccultSanctum
             => Pin(Make("Box", "occ_shelf", pos, Square(rot), 4f, new[] { "occ_wood_destr_0", "occ_wood_destr_1", "occ_wood_destr_2" }, false, new Vector2(2.05f, 0.65f), 0f, out _));
 
         public static void Bench(Vector2 pos, float rot)
-            => Pin(Make("Box", "occ_bench", pos, Square(rot), 2f, new[] { "occ_wood_destr_0", "occ_wood_destr_2" }, false, new Vector2(1.8f, 0.45f), 0f, out _));
+            => Make("Box", "occ_bench", pos, Square(rot), 2f, new[] { "occ_wood_destr_0", "occ_wood_destr_2" }, false, new Vector2(1.8f, 0.45f), 0f, out _);   // (0.39.0, the user: benches can be pushed again)
 
         /// a stone fireplace against the wall with a fire in it; smashed, the fire goes out
         public static void Fireplace(Vector2 pos, float rot)

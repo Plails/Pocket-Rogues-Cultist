@@ -46,8 +46,45 @@ namespace OccultSanctum
             next = Time.time + Random.Range(4f, 7f);
         }
 
-        void OnDestroy() { beam?.Destroy(); theirs?.Destroy(); Release(); Lights(false); }
-        void OnDisable() { EndPose(); }
+        void OnDestroy() { Loose(); beam?.Destroy(); theirs?.Destroy(); Release(); Lights(false); }
+        /// (0.38.1) a caster switched off or taken away in the middle of his beam: his coroutines stop on their own, so
+        /// nothing of the cast may stay behind - no beam hanging in the air, no glow balls, no monsters left frozen
+        void OnDisable()
+        {
+            Loose();
+            Lights(false);
+            beam?.Show(false); theirs?.Show(false);
+            Release();
+            EndPose();
+            if (busy && ai != null && mob != null && mob.alive) ai._enableAI = true;
+            busy = false; InClash = false;
+        }
+
+        // the glow balls of the gathering and of the duel's knot (kept here so a broken-off cast can take them away)
+        SpriteRenderer orbFl, knotFl, knot2Fl;
+        void Loose()
+        {
+            if (orbFl != null) Destroy(orbFl.gameObject);
+            if (knotFl != null) Destroy(knotFl.gameObject);
+            if (knot2Fl != null) Destroy(knot2Fl.gameObject);
+            orbFl = knotFl = knot2Fl = null;
+        }
+
+        /// (0.38.1, the sandbox: one beam through the hall killed 13 of his own people and the hero got their
+        /// experience) the beam still burns everyone in it, but one of his own side only singes: a little damage, never
+        /// to death; another side (freed prisoners, the hero) gets the full burn
+        /// one of his own side: the game's damage from a monster makes a target-less one turn on whoever hit it (the
+        /// sandbox: singed cultists went for the archmage and the cult fought itself to death), so his own get the burn
+        /// as from a trap - no one to turn on, no first-hit bonus
+        bool Own(Creature c) => mob != null && c != null && c.faction == mob.faction;
+
+        float BurnOf(Creature c, float full)
+        {
+            if (mob == null || c.faction != mob.faction) return full;
+            float d = 0f;
+            try { d = (float)mob.Damage * 0.12f + c.HP_max * 0.01f; } catch { d = 1f; }
+            return Mathf.Min(d, c.HP_cur - 1f);
+        }
 
         // ---- the onlookers (the user): while the beams fight, every other monster about leaves off fighting, steps
         // back out of the beams' way (both burn whoever is in them) and stands watching the duel
@@ -197,7 +234,8 @@ namespace OccultSanctum
             {
                 var c = h.collider != null ? h.collider.GetComponentInParent<Creature>() : null;
                 if (c == null || c == mob || !c.alive || !burnt.Add(c) || (foe != null && c == foe._creature) || (c is Mob mb && Prisoner.Caged.Contains(mb))) continue;
-                try { c.SetDamage(dmg * 2f, 1f, false, by); Hits++; } catch { }
+                float dd = by == ai ? BurnOf(c, dmg * 2f) : dmg * 2f;
+                if (dd > 0f) try { if (by == ai && Own(c)) c.SetDamage(dd, 1f, true, null); else c.SetDamage(dd, 1f, false, by); Hits++; } catch { }
                 Sparks.Burst(c.transform.position, BBody, 3, 2.2f, 0.25f, like, 0.35f);
             }
         }
@@ -283,12 +321,14 @@ namespace OccultSanctum
         void Update()
         {
             if (busy || mob == null || ai == null || !mob.alive) return;
+            // (0.38.1) a look for a breathing hero five times a second, not every frame: it searches the whole scene
             if (Time.time > nextAnswer)
             {
+                nextAnswer = Time.time + 0.2f;
                 var b = Breather(transform.position, transform.position);
                 if (b != null) { StartCoroutine(Answer(b)); return; }
             }
-            if (Time.time > nextSeen)
+            if (Debug && Time.time > nextSeen)
             {
                 nextSeen = Time.time + 2f;
                 foreach (var c in Object.FindObjectsOfType<Controller>())
@@ -374,17 +414,17 @@ namespace OccultSanctum
             if (beam == null) beam = new Beam("ElderBeam", like, BHalo, BBody, BCore);
             CastPose();
             // gathering: a red glow grows at his hand
-            var orb = Glow.Flare(null, like, 43); orb.color = BBody;
+            var orb = orbFl = Glow.Flare(null, like, 43); orb.color = BBody;
             for (float c = 0f; c < 0.75f; c += Time.deltaTime)
             {
-                if (!Alive()) { Destroy(orb.gameObject); yield return End(); yield break; }
+                if (!Alive()) { Loose(); yield return End(); yield break; }
                 Hold();
                 if (target != null) Face((Vector2)target.position - (Vector2)transform.position, 360f * Time.deltaTime);
                 orb.transform.position = Hand; orb.transform.localScale = Vector3.one * (0.2f + c * 1.1f + 0.08f * Mathf.Sin(Time.time * 30f));
                 if (Random.value < 0.3f) Sparks.Burst(Hand + Random.insideUnitCircle * 0.6f, BBody, 1, -1.2f, 0.18f, like, 0.3f);
                 yield return null;
             }
-            Destroy(orb.gameObject);
+            Loose();
             Sparks.Burst(Hand, BBody, 10, 2.5f, 0.3f, like);
             Sparks.Ring(Hand, BBody, 1.2f * Width, like);
             Shake(0.15f, 0.12f);
@@ -488,8 +528,8 @@ namespace OccultSanctum
                 var c = h.collider != null ? h.collider.GetComponentInParent<Creature>() : null;
                 if (c == null || c == mob || !c.alive || !burnt.Add(c) || (c is Mob mb && Prisoner.Caged.Contains(mb))) continue;
                 bool monster = !(c is Character);
-                float d = monster ? (float)mob.Damage * 0.7f + c.HP_max * 0.07f : dmg;
-                try { c.SetDamage(d, 1f, false, ai); Hits++; } catch { }
+                float d = BurnOf(c, monster ? (float)mob.Damage * 0.7f + c.HP_max * 0.07f : dmg);
+                if (d > 0f) try { if (Own(c)) c.SetDamage(d, 1f, true, null); else c.SetDamage(d, 1f, false, ai); Hits++; } catch { }
                 if (monster && c.ctrl != null)
                 {
                     Vector2 cp = c.transform.position; float k = Mathf.Max(0f, Vector2.Dot(cp - a, dir));
@@ -510,7 +550,7 @@ namespace OccultSanctum
                 Vector2 p = c.transform.position, me = transform.position, to = me - p;
                 string why = to.magnitude > Range + 4.5f ? "far" : Vector2.Angle(c.transform.right, to) > 60f ? "not facing" : !(Clear(p, me, c.transform) || Clear(Hand, p, c.transform) || Clear(p + (Vector2)c.transform.right * 0.4f, Hand, c.transform)) ? "wall " + blocker : null;
                 if (why == null) return c;
-                if (Time.time > nextWhy) { nextWhy = Time.time + 1f; SanctumPlugin.Log.LogInfo("Sanctum: a hero breathes near " + Who + " but no clash: " + why); }
+                if (Debug && Time.time > nextWhy) { nextWhy = Time.time + 1f; SanctumPlugin.Log.LogInfo("Sanctum: a hero breathes near " + Who + " but no clash: " + why); }
             }
             return null;
         }
@@ -550,7 +590,7 @@ namespace OccultSanctum
             theirs.Show(true);
             // (the user: like the anime beam clash) a ball of raging power where the streams meet, waves out of it
             beam.EndScale = 0.35f; theirs.EndScale = 0.35f;
-            var knot = Glow.Flare(null, like, 45); var knot2 = Glow.Flare(null, like, 46);
+            var knot = knotFl = Glow.Flare(null, like, 45); var knot2 = knot2Fl = Glow.Flare(null, like, 46);
             float wave = 0f;
             Sparks.Ring(Vector2.Lerp(Hand, (Vector2)foe.transform.position, 0.5f), Color.white, 2.2f, like);
             Shake(0.25f, 0.25f);
@@ -611,8 +651,7 @@ namespace OccultSanctum
             InClash = false; LastOutcome = outcome;
             SanctumPlugin.Log.LogInfo("Sanctum: the beam duel ends: " + (outcome == 1 ? "the hero is hit" : outcome == -1 ? Who + " is hit" : "a draw"));
             theirs.Show(false);
-            if (knot != null) Destroy(knot.gameObject);
-            if (knot2 != null) Destroy(knot2.gameObject);
+            Loose();
             beam.EndScale = 1f;
             Release();
             if (foe != null && foe._creature != null && Alive())

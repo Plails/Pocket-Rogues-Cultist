@@ -30,6 +30,7 @@ namespace OccultSanctum
 
         public static Mob Spawn(Vector2 pos)
         {
+            if (SideRoom.Thinning && UnityEngine.Random.value < 0.4f) return null;   // (0.39.0 a quarter; 0.39.3 the user again: fewer mobs)
             var p = Prefab();
             if (p == null) return null;
             var go = Builder.Spawn(p, pos, UnityEngine.Random.Range(0f, 360f));

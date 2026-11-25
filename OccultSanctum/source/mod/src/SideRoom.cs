@@ -87,6 +87,9 @@ namespace OccultSanctum
         public static readonly string[] Tiny = { "store", "pantry", "shrine", "study", "cell", "alchemy", "tomb" };
         public static bool Fits(string role, RectInt r) => !Roomy.Contains(role) || Mathf.Min(r.width, r.height) >= 5 && r.width * r.height >= 30;
 
+        /// (0.39.0, the user: fewer mobs) while a room is furnished, about one in four of its people is left out
+        public static bool Thinning;
+
         public static void Furnish(RectInt room, string role, Layout L, System.Random rand)
         {
             Rooms.Add((room, role));

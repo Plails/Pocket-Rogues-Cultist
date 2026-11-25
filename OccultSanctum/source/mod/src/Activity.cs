@@ -13,7 +13,7 @@ namespace OccultSanctum
     /// or was hit) it drops all that and fights as usual.
     public class Activity : MonoBehaviour
     {
-        public enum Kind { Read, Pray, Shoot, Patrol, Guard, Train, Sit, Wander, Escort, Execute, Shuffle, Follow, Inspect, Study, Preach, Work, Sleep }
+        public enum Kind { Read, Pray, Shoot, Patrol, Guard, Train, Sit, Wander, Escort, Execute, Shuffle, Follow, Inspect, Study, Preach, Work, Sleep, Roam }
         public Kind What;
         public Vector2 Look;                 // what he faces (the lectern, the statue, the target, the door); Wander: the room's middle
         public Vector2[] Route;              // the points he walks between (Inspect / Study: the things he looks at)
@@ -53,7 +53,7 @@ namespace OccultSanctum
             Heading = transform.eulerAngles.z;
             // one set down inside a table or a bench (they are fixed now: they no longer get shoved off him) steps out
             // beside it first - a reader stood in the middle of his desk (the user)
-            if (What != Kind.Sit && What != Kind.Sleep && Physics2D.OverlapCircleAll(transform.position, 0.3f).Any(c => c != null && !c.isTrigger && c.GetComponentInParent<Container>() != null && c.GetComponentInParent<Mob>() == null))
+            if ((What != Kind.Sit || GetComponent<CultistTag>() != null) && What != Kind.Sleep && Physics2D.OverlapCircleAll(transform.position, 0.3f).Any(c => c != null && !c.isTrigger && c.GetComponentInParent<Container>() != null && c.GetComponentInParent<Mob>() == null))
             {
                 var free = SpotBy(transform.position, 0.7f, 1.0f, 1f); Claimed = null;
                 SetPos(free);
@@ -65,13 +65,12 @@ namespace OccultSanctum
                 Route = Cages?.Where(c => c != null).Select(c => (Vector2)c.transform.position).ToArray();
                 What = Kind.Inspect;
             }
-            // a cultist does not just stand: he studies the things about him
+            // (0.39.0, the user: cultists must not stand at tables and lecterns - they roam about like the game's own
+            // mobs, the witch, and now and then stop to look at a cage, a statue, a table, then walk on)
             bool cult = GetComponent<CultistTag>() != null;
-            if (cult && (What == Kind.Inspect || What == Kind.Guard))
-            {
-                if (What == Kind.Guard || Route == null || Route.Length == 0) Route = Sights(transform.position, 8f);
-                What = Kind.Study;
-            }
+            if (cult && (What == Kind.Read || What == Kind.Pray || What == Kind.Study || What == Kind.Inspect || What == Kind.Guard
+                         || What == Kind.Sit || What == Kind.Work || What == Kind.Wander || What == Kind.Sleep))
+            { What = Kind.Roam; Route = null; step = 0; waitTill = Time.time + UnityEngine.Random.Range(0f, 3f); }
             if ((What == Kind.Study || What == Kind.Inspect) && (Route == null || Route.Length == 0)) { What = Kind.Wander; Look = transform.position; }
             if (What == Kind.Pray && mob != null && mob.ctrl != null) Ritual.Casters.Add(mob.ctrl);
             if (What == Kind.Sit) SitStart();
@@ -366,6 +365,53 @@ namespace OccultSanctum
             return me;
         }
 
+        // ---------------------------------------------------------------- the cultist roaming
+        Vector2 roamTo, roamLook; bool roamSight;
+
+        /// a free floor point some steps off, not too far from where he began (they spread over the sanctum, not all in one place)
+        Vector2? RoamPoint()
+        {
+            Vector2 me = transform.position;
+            for (int i = 0; i < 12; i++)
+            {
+                Vector2 p = me + UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(2.5f, 6.5f);
+                if ((p - home).sqrMagnitude > 11f * 11f) p = home + (p - home).normalized * UnityEngine.Random.Range(2f, 9f);
+                if (!Room.In(p)) continue;
+                if (Physics2D.OverlapCircleAll(p, 0.35f).Any(c => c != null && !c.isTrigger && (c.GetComponentInParent<Container>() != null || ((1 << c.gameObject.layer) & ObstacleMask) != 0) && c.GetComponentInParent<Mob>() == null)) continue;
+                return p;
+            }
+            return null;
+        }
+
+        /// walks about; sometimes goes up to a thing (a cage, a statue, a table, the altar) and looks at it a while,
+        /// sometimes stops a moment where he is, then walks on
+        void Roam()
+        {
+            if (Waiting()) return;
+            if (step == 0)
+            {
+                roamSight = false;
+                if (UnityEngine.Random.value < 0.4f)
+                {
+                    var s = Sights(transform.position, 8f).Where(p => (p - home).sqrMagnitude < 13f * 13f).ToArray();
+                    if (s.Length > 0) { roamLook = s[0]; roamTo = SpotBy(roamLook, 1.1f, 1.5f, 0.8f); roamSight = true; }
+                }
+                if (!roamSight)
+                {
+                    Claimed = null;
+                    var p = RoamPoint();
+                    if (!p.HasValue) { Pause(1f, 2f); return; }
+                    roamTo = p.Value;
+                }
+                step = 1;
+            }
+            if (!Walk(roamTo, 1.0f)) return;
+            step = 0;
+            if (roamSight) { Face(roamLook); Pause(2.5f, 5f); }                             // stops and looks at it
+            else if (UnityEngine.Random.value < 0.45f) { facePt = null; Pause(0.8f, 2.2f); } // a short stop where he is
+            Claimed = null;
+        }
+
         // ---------------------------------------------------------------- the cultist studying things
         int sub; float subAt; Vector2 basePos;
 
@@ -494,8 +540,7 @@ namespace OccultSanctum
             // the benches neither push him off nor get pushed about
             foreach (var b in Benches(transform.position, 12f))
             {
-                foreach (var brb in b.GetComponentsInChildren<Rigidbody2D>(true)) { brb.velocity = Vector2.zero; brb.bodyType = RigidbodyType2D.Static; }
-                foreach (var bc in b.GetComponentsInChildren<Collider2D>(true))
+                                foreach (var bc in b.GetComponentsInChildren<Collider2D>(true))
                     foreach (var mc in GetComponentsInChildren<Collider2D>(true))
                         if (bc != null && mc != null) Physics2D.IgnoreCollision(mc, bc, true);
             }
@@ -669,6 +714,7 @@ namespace OccultSanctum
                     if (Route == null || Route.Length == 0) Route = new[] { Look + UnityEngine.Random.insideUnitCircle * Radius };
                     if (Walk(Route[0], 1.0f)) { Route = null; Pause(1.5f, 4.5f); }
                     return;
+                case Kind.Roam: Roam(); return;
                 case Kind.Sit: Sit(); return;
                 case Kind.Study: Study(); return;
                 case Kind.Execute: Execute(); return;

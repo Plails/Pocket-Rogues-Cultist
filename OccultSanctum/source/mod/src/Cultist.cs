@@ -30,6 +30,7 @@ namespace OccultSanctum
 
         public static Mob Spawn(Vector2 pos)
         {
+            if (SideRoom.Thinning && UnityEngine.Random.value < 0.4f) return null;   // (0.39.0 a quarter; 0.39.3 the user again: fewer mobs)
             var p = Prefab();
             if (p == null) return null;
             var go = Builder.Spawn(p, pos, UnityEngine.Random.Range(0f, 360f));
@@ -42,6 +43,7 @@ namespace OccultSanctum
             mob.Init();
             Dress(go, mob);
             Sizer.Fit(go, Sizer.Cultist);                                             // as big as the hero (the user)
+            go.AddComponent<CastAnim>();                                              // (0.39.2, the user) his own animation on the sphere shot
             var ai = go.GetComponent<AIController>();
             if (ai != null) try { GameManager.Instance.AddMob(ai); } catch { }
             return mob;
