@@ -210,6 +210,8 @@ namespace FlagellantMod
             l.damageInjectors = list;
         }
 
+        public static Sprite IconOf(string id) => Icon(id, null);
+
         static Sprite Icon(string id, Sprite fallback)
         {
             try

@@ -14,7 +14,7 @@ namespace FlagellantMod
     /// A new playable class: the Flagellant (self-flagellant with flails).
     /// Runs on the Berserker's engine, but is a hero of its own: own guild building, card, name, 9 skills,
     /// 4 flails, look and save data.
-    [BepInPlugin("custom.pocketrogues.flagellant", "Flagellant class", "2.6.6")]
+    [BepInPlugin("custom.pocketrogues.flagellant", "Flagellant class", "2.6.7")]
     public class FlagellantPlugin : BaseUnityPlugin
     {
         internal static ManualLogSource Log;
@@ -136,7 +136,31 @@ namespace FlagellantMod
             return k * (1f - Mathf.Min(75f, FLogic.MissingPct(ch)) * 0.01f);
         }
 
-        public static void StartEcstasy(Character ch, int lvl, float dur) { ecstasyLvl = lvl; ecstasyUntil = Time.time + dur; }
+        public static void StartEcstasy(Character ch, int lvl, float dur) { ecstasyLvl = lvl; ecstasyUntil = Time.time + dur; EcstasyIcon(ch, dur); }
+
+        /// (2.6.7, the user) the ecstasy shows among his effects under his name with its timer, like the Berserker's rage:
+        /// an effect of the game's own with the skill's icon and no work of its own (the bonus is counted here as before)
+        static Buff ecstasyBuff;
+        static void EcstasyIcon(Character ch, float dur)
+        {
+            try
+            {
+                if (ch == null) return;
+                if (ecstasyBuff == null)
+                {
+                    ecstasyBuff = ScriptableObject.CreateInstance<Buff>();
+                    ecstasyBuff.name = "Flagellant_Ecstasy"; ecstasyBuff.hideFlags = HideFlags.HideAndDontSave;
+                    ecstasyBuff.buffType = BuffTypes.damageMod; ecstasyBuff.value = 0f;
+                    ecstasyBuff.titleLocalized = new I2.Loc.LocalizedString("Effects/Flagellant/ecstasy");
+                    ecstasyBuff.descriptionLocalized = new I2.Loc.LocalizedString("Effects/Flagellant/ecstasy_dsc");
+                    try { HarmonyLib.Traverse.Create(ecstasyBuff).Field("_hidePopup").SetValue(true); } catch { }
+                }
+                ecstasyBuff.icon = FlagSkills.IconOf("suffering");
+                ecstasyBuff.time = dur; ecstasyBuff.timeReal = dur;
+                ch.AddEffect(ecstasyBuff, false);
+            }
+            catch (System.Exception e) { FlagellantPlugin.Log.LogWarning("Ecstasy icon: " + e.Message); }
+        }
         public static void StartCleanseBonus(float bonus, float dur) { cleanseBonus = bonus; cleanseUntil = Time.time + dur; }
         public static void AddRegen(float perSec, float dur) => regen.Add((Time.time + dur, perSec));
 
@@ -202,8 +226,7 @@ namespace FlagellantMod
                 // (the user's list) a plain whip in his empty right hand - only to look at, never in the inventory
                 bool whip = Flag.Active && ch.charClass == CharacterClasses.BERSERKER;
                 var iw = ch.GetComponent<IdleWhip>();
-                if (whip && iw == null) ch.gameObject.AddComponent<IdleWhip>();
-                else if (!whip && iw != null) Destroy(iw);
+                if (iw != null) Destroy(iw);                                 // (2.6.7) the folded whip in his hand instead
                 var hl = ch.GetComponent<HandsLook>();
                 if (whip && hl == null) ch.gameObject.AddComponent<HandsLook>();
                 else if (!whip && hl != null) Destroy(hl);

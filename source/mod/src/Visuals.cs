@@ -52,6 +52,17 @@ namespace FlagellantMod
 
         /// which lash he swings: the look of the flail in his hands (like the hunter's bolts follow the bolts he carries);
         /// without one of the Cultist's flails it is a plain brown leather whip
+        /// how many lashes are out now (the hand shows the bare handle while any is)
+        public static int Lashing;
+        public static float LastLash = -99f;
+        /// a lash is out now (never longer than a lash can last - a counter left behind is put right)
+        public static bool LashOut()
+        {
+            if (Lashing <= 0) return false;
+            if (Time.time - LastLash > 1.2f) { Lashing = 0; return false; }
+            return true;
+        }
+
         public static string WhipStyle(Character ch)
         {
             try
@@ -165,7 +176,7 @@ namespace FlagellantMod
                 Out++; counted = true;
                 try { heroSr = hero.heroSprite; } catch { }
                 // the flail in his hand turns into the lash: it is hidden while the lash is out
-                try { held = hero.RightHandSprite; if (held != null && style != "leather") { hiding++; held.enabled = false; } else held = null; } catch { held = null; }
+                held = null; Lashing++; lashed = true; LastLash = Time.time;                       // (2.6.7) the handle stays in the hand: HandsLook shows it
                 int tails = kind.tails;
                 for (int l = 0; l < tails; l++)
                 {
@@ -281,7 +292,8 @@ namespace FlagellantMod
             }
 
             public static int Out; bool counted;                                           // (lashes out now: the idle whip hides meanwhile)
-            void OnDestroy() { if (counted) { counted = false; Out = Mathf.Max(0, Out - 1); } try { if (held != null && --hiding <= 0) { hiding = 0; held.enabled = true; } } catch { } }
+            bool lashed;
+            void OnDestroy() { if (counted) { counted = false; Out = Mathf.Max(0, Out - 1); } if (lashed) { lashed = false; Lashing = Mathf.Max(0, Lashing - 1); } }
 
             /// the crack of the tip: a white star flash and a spray of sparks in the lash's colour
             void Crack(Vector2 at, float a)
@@ -479,7 +491,7 @@ namespace FlagellantMod
                 var tp = Art.Get("whip", style + "_tip", 42f);
                 if (seg == null || hero == null) { Destroy(gameObject); return; }
                 try { heroSr = hero.heroSprite; } catch { }
-                try { held = hero.RightHandSprite; if (held != null && held.enabled && style != "leather") held.enabled = false; else held = null; } catch { held = null; }
+                held = null; Lashing++; lashed = true; LastLash = Time.time;
                 face = Mathf.Atan2(hero.transform.right.y, hero.transform.right.x) * Mathf.Rad2Deg;   // strictly straight: the line is fixed
                 int n = Mathf.Clamp(Mathf.RoundToInt(len * 42f / Mathf.Max(2f, seg.rect.width - 2f)), 4, 48);
                 segs = new SpriteRenderer[n];
@@ -528,7 +540,8 @@ namespace FlagellantMod
                 if (t >= SnapOut + SnapHold + SnapBack) Destroy(gameObject);
             }
 
-            void OnDestroy() { try { if (held != null) held.enabled = true; } catch { } }
+            bool lashed;
+            void OnDestroy() { if (lashed) { lashed = false; Lashing = Mathf.Max(0, Lashing - 1); } }
         }
 
         // ---------------- Religious Ecstasy: he flogs himself with his whip - three blows over his shoulders onto his back
@@ -561,7 +574,7 @@ namespace FlagellantMod
                 var tp = Art.Get("whip", style + "_tip", 42f);
                 if (seg == null || hero == null) { Destroy(gameObject); return; }
                 try { heroSr = hero.heroSprite; } catch { }
-                try { held = hero.RightHandSprite; if (held != null && held.enabled && style != "leather") held.enabled = false; else held = null; } catch { held = null; }
+                held = null; Lashing++; lashed = true; LastLash = Time.time;
                 segW = Mathf.Max(2f, seg.rect.width - 2f) / 42f;
                 int n = Mathf.Clamp(Mathf.RoundToInt(Len / segW), 4, 14);
                 segs = new SpriteRenderer[n];
@@ -646,7 +659,8 @@ namespace FlagellantMod
                 if (t >= end + SelfBack) Destroy(gameObject);
             }
 
-            void OnDestroy() { try { if (held != null) held.enabled = true; } catch { } }
+            bool lashed;
+            void OnDestroy() { if (lashed) { lashed = false; Lashing = Mathf.Max(0, Lashing - 1); } }
         }
 
         /// moves a trail picture from a to b in a moment (draws a sharp streak)

@@ -21,6 +21,25 @@ namespace FlagellantMod
         public const string InquisitionPath = "Effects/Flagellant/Inquisition";
         static readonly Dictionary<ItemsDataBase, (SO_ItemWeapon[] eq, List<SO_ItemWeapon> found)> originals = new Dictionary<ItemsDataBase, (SO_ItemWeapon[], List<SO_ItemWeapon>)>();
 
+        static readonly Dictionary<string, Sprite> held = new Dictionary<string, Sprite>();
+        /// (2.6.7, the user's photo) the whip carried folded in the right hand ("coil"), or its bare handle while it lashes
+        public static Sprite Held(string style, bool handleOnly)
+        {
+            string file = style + (handleOnly ? "_handle" : "_coil");
+            if (held.TryGetValue(file, out var s)) return s;
+            var pivot = new Vector2(18.5f, 2.5f);
+            try
+            {
+                var meta = Path.Combine(FlagellantPlugin.Dir, "weapons", file + ".grip");
+                if (File.Exists(meta)) { var p = File.ReadAllText(meta).Split(','); pivot = new Vector2(float.Parse(p[0], System.Globalization.CultureInfo.InvariantCulture), float.Parse(p[1], System.Globalization.CultureInfo.InvariantCulture)); }
+            }
+            catch { }
+            s = Load(file, 42f, pivot);
+            if (s == null && style != "leather") s = Held("leather", handleOnly);
+            held[file] = s;
+            return s;
+        }
+
         static Sprite Load(string file, float ppu, Vector2 pivotPx)
         {
             var path = Path.Combine(FlagellantPlugin.Dir, "weapons", file + ".png");

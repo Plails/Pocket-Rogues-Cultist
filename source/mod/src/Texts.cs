@@ -144,6 +144,8 @@ namespace FlagellantMod
             // ---- popups ----
             ["FLG/Cleansed"] = ("Очищение", "Cleansed"),
             ["FLG/Ecstasy"] = ("Экстаз!", "Ecstasy!"),
+            ["Effects/Flagellant/ecstasy"] = ("Религиозный экстаз", "Religious Ecstasy"),
+            ["Effects/Flagellant/ecstasy_dsc"] = ("Чем меньше здоровья, тем больше урон", "The less health, the more damage"),
             ["FLG/NoBlood"] = ("Мало крови", "Not enough blood"),
         };
 

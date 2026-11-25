@@ -21,7 +21,10 @@ namespace FlagellantMod
                 var R = ch.RightHandSprite; var L = ch.LeftHandSprite;
                 if (R == null || L == null) return;
                 Sprite club = ch.Weapon != null ? ch.Weapon.EquipSprite : null;
-                Sprite whip = ch.ShieldWeapon != null ? ch.ShieldWeapon.EquipSprite : null;
+                // (2.6.7) the whip is always in his right hand, folded; its look follows the whip worn, the plain leather one
+                // without; while it lashes only its handle stays in the hand
+                string style = ch.ShieldWeapon != null && Weapons.IsWhip(ch.ShieldWeapon) ? ch.ShieldWeapon.Name.Substring(4) : "leather";
+                Sprite whip = Weapons.Held(style, FV.LashOut()) ?? (ch.ShieldWeapon != null ? ch.ShieldWeapon.EquipSprite : null);
                 if (L.sprite != club) L.sprite = club;
                 if (!L.flipX) L.flipX = true;
                 if (R.sprite != whip) R.sprite = whip;
