@@ -39,7 +39,7 @@ namespace FlagellantMod
         {
             if (ch == null || !ch.alive || !ch.gameObject.activeInHierarchy) return false;
             if (FV.FxWhip.Out > 0) return false;                                              // a lash of his skills is out
-            try { if (ch.Weapon != null) return false; } catch { }
+            try { if (ch.ShieldWeapon != null && Weapons.IsWhip(ch.ShieldWeapon)) return false; } catch { }   // (2.6.6) a worn whip is there instead
             try { if (ch.RightHandSprite == null || !ch.RightHandSprite.enabled) return false; } catch { return false; }
             return true;
         }

@@ -719,7 +719,7 @@ namespace FlagellantMod
                 if (ch == null) return true;
                 // the flails swap hands only with two flails; the whip in the left hand does not join the ordinary blows
                 if (!WhipHand && ch.ShieldWeapon != null && !Weapons.IsWhip(ch.ShieldWeapon)) return true;
-                Hand(__instance, WhipHand ? 1 : 0);
+                Hand(__instance, WhipHand ? 0 : 1);                         // (2.6.6) club left, whip right
                 return false;
             }
             catch { return true; }
@@ -744,7 +744,7 @@ namespace FlagellantMod
             {
                 if (!Flag.Active || FLogic.Hero(source) == null || !FlagSkills.IdOf.TryGetValue(__instance, out var id)) return;
                 RightHandOnlyPatch.WhipHand = id == "poisonLash" || id == "quickSnap";
-                RightHandOnlyPatch.Hand(source, RightHandOnlyPatch.WhipHand ? 1 : 0);
+                RightHandOnlyPatch.Hand(source, RightHandOnlyPatch.WhipHand ? 0 : 1);
             }
             catch { }
         }

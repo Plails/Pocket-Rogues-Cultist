@@ -76,11 +76,11 @@ namespace FlagellantMod
             return "leather";
         }
 
-        /// the hand that holds the whip (the left one), where the lash comes out
+        /// the hand that holds the whip (the RIGHT one since 2.6.6 - the club is in the left), where the lash comes out
         public static Vector2 WhipHand(Character ch)
         {
             Vector2 hand = (Vector2)ch.transform.position + (Vector2)ch.transform.right * 0.15f;
-            try { if (ch.LeftHandSprite != null) hand = ch.LeftHandSprite.transform.position; } catch { }
+            try { if (ch.RightHandSprite != null) hand = ch.RightHandSprite.transform.position; } catch { }
             return hand;
         }
 
@@ -165,7 +165,7 @@ namespace FlagellantMod
                 Out++; counted = true;
                 try { heroSr = hero.heroSprite; } catch { }
                 // the flail in his hand turns into the lash: it is hidden while the lash is out
-                try { held = hero.LeftHandSprite; if (held != null && style != "leather") { hiding++; held.enabled = false; } else held = null; } catch { held = null; }
+                try { held = hero.RightHandSprite; if (held != null && style != "leather") { hiding++; held.enabled = false; } else held = null; } catch { held = null; }
                 int tails = kind.tails;
                 for (int l = 0; l < tails; l++)
                 {
@@ -353,92 +353,13 @@ namespace FlagellantMod
 
         // ---------------- Hammer of Penance: the spiked ball on its chain goes round over his head (from behind him),
         // then comes down in front of him; cracks in the ground, dust and stone chips where it lands
-        public const float HammerSpin = 0.13f / 0.25f, HammerFall = 0.07f / 0.25f; // raised (no whirl, MRX), then down - the 2.4 speed (the user); the hit waits for it
-        /// the head and the chain of the hammer follow the flail in his hand (the same pieces as his lash);
-        /// without one of the Cultist's flails it is a plain spiked mace on an iron chain
-        static (Sprite head, Sprite link, float headScale) HammerLook(Character ch)
-        {
-            var style = FlailStyle(ch);
-            if (style != "leather")
-            {
-                var head = Art.Get("whip", style + "_tip", 42f);
-                var link = Art.Get("whip", style + "_seg", 42f);
-                if (head != null && link != null) return (head, link, Mathf.Clamp(22f / Mathf.Max(head.rect.width, head.rect.height), 1.2f, 1.7f));
-            }
-            return (Art.Get("", "hammer_ball", 42f), Art.Get("whip", "penitentChain_seg", 42f), 1f);
-        }
-
+        /// (the user, 2.6.3: no separate club flying about - it looked bent - and no slow swing) the Hammer of
+        /// Penance is the game's own blow of the club in his hand; the crack is left on the floor as it lands
+        /// (2.6.4, the user: the blow was quick but the hit came late) the game calls the skill on the blow itself - the
+        /// crack and the damage come at once, no wait of our own
         public static System.Collections.IEnumerator HammerSwing(Character ch, Vector2 target)
         {
-            const float ChainLen = 0.72f;                                    // from his fist to the ball while it whirls
-            var (headSp, linkSp, headScale) = HammerLook(ch);
-            if (headSp == null) yield break;
-            SpriteRenderer hs = null;
-            try { hs = ch.heroSprite; } catch { }
-            var root = new GameObject("Flagellant_hammer");
-            SpriteRenderer Piece(Sprite sp, int order)
-            {
-                var g = new GameObject("piece"); g.transform.SetParent(root.transform, false);
-                var r = g.AddComponent<SpriteRenderer>(); r.sprite = sp;
-                if (hs != null) { r.sortingLayerID = hs.sortingLayerID; r.sortingOrder = hs.sortingOrder + order; }
-                if (GameFx.PreviewLayer >= 0) g.layer = GameFx.PreviewLayer;
-                return r;
-            }
-            var ball = Piece(headSp, 34);
-            var links = new System.Collections.Generic.List<SpriteRenderer>();
-            float linkLen = linkSp != null ? Mathf.Max(0.08f, (linkSp.rect.width - 2f) / 42f) : 0.15f;
-            SpriteRenderer held = null;                                       // the flail in his hand becomes the whirling hammer
-            try { held = ch.RightHandSprite; if (held != null && held.enabled) held.enabled = false; else held = null; } catch { held = null; }
-            float t = 0f, lastA = 0f;
-            while (t < HammerSpin + HammerFall && ch != null && root != null)
-            {
-                t += Time.deltaTime;
-                Vector2 hand = ch.transform.position;
-                try { if (ch.RightHandSprite != null) hand = ch.RightHandSprite.transform.position; } catch { }
-                float face = Mathf.Atan2(ch.transform.right.y, ch.transform.right.x) * Mathf.Rad2Deg;
-                Vector2 p; float s;
-                if (t < HammerSpin)
-                {
-                    // he lifts it over his head (seen from above: back over his shoulder, a little bigger as it rises),
-                    // holds it there a moment - no whirl of the chain
-                    float k = Mathf.Clamp01(t / (HammerSpin * 0.75f));
-                    k = k * k * (3f - 2f * k);
-                    lastA = face + 180f - 25f * (1f - k);
-                    p = hand + Dir(lastA) * (ChainLen * (0.35f + 0.65f * k)); s = Mathf.Lerp(1f, 1.35f, k);
-                }
-                else
-                {
-                    // and down on the ground in front of him (a little smaller as it falls from above)
-                    float k = Mathf.Clamp01((t - HammerSpin) / HammerFall);
-                    p = Vector2.Lerp(hand + Dir(lastA) * ChainLen, target, k * k); s = Mathf.Lerp(1.35f, 1f, k);
-                }
-                ball.transform.position = new Vector3(p.x, p.y, 0f);
-                ball.transform.localScale = Vector3.one * headScale * s;
-                ball.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(p.y - hand.y, p.x - hand.x) * Mathf.Rad2Deg - 90f);
-                // the chain: links laid from the fist to the ball
-                if (linkSp != null)
-                {
-                    Vector2 d = p - hand; float dist = d.magnitude;
-                    int n = Mathf.Clamp(Mathf.CeilToInt(dist / linkLen), 1, 24);
-                    while (links.Count < n) links.Add(Piece(linkSp, 33));
-                    float rot = Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg;
-                    for (int i = 0; i < links.Count; i++)
-                    {
-                        links[i].enabled = i < n;
-                        if (i >= n) continue;
-                        Vector2 q = hand + d * ((i + 0.5f) / n);
-                        links[i].transform.position = new Vector3(q.x, q.y, 0f);
-                        links[i].transform.rotation = Quaternion.Euler(0f, 0f, rot);
-                        links[i].transform.localScale = new Vector3(dist / n / linkLen, 1f, 1f);
-                    }
-                }
-                yield return null;
-            }
-            // the ball rests a moment in the dent and fades; the chain is drawn back into his hand
-            foreach (var lk in links) if (lk != null) Object.Destroy(lk.gameObject);
-            if (ball != null) { ball.transform.SetParent(null, true); var f = ball.gameObject.AddComponent<FxLife>(); f.life = 0.22f; f.grow = 1f; }
-            if (root != null) Object.Destroy(root);
-            try { if (held != null) held.enabled = true; } catch { }
+            yield break;
         }
 
         public static void HammerImpact(Character ch, Vector2 at, float r)
@@ -558,7 +479,7 @@ namespace FlagellantMod
                 var tp = Art.Get("whip", style + "_tip", 42f);
                 if (seg == null || hero == null) { Destroy(gameObject); return; }
                 try { heroSr = hero.heroSprite; } catch { }
-                try { held = hero.LeftHandSprite; if (held != null && held.enabled && style != "leather") held.enabled = false; else held = null; } catch { held = null; }
+                try { held = hero.RightHandSprite; if (held != null && held.enabled && style != "leather") held.enabled = false; else held = null; } catch { held = null; }
                 face = Mathf.Atan2(hero.transform.right.y, hero.transform.right.x) * Mathf.Rad2Deg;   // strictly straight: the line is fixed
                 int n = Mathf.Clamp(Mathf.RoundToInt(len * 42f / Mathf.Max(2f, seg.rect.width - 2f)), 4, 48);
                 segs = new SpriteRenderer[n];

@@ -14,7 +14,7 @@ namespace FlagellantMod
     /// A new playable class: the Flagellant (self-flagellant with flails).
     /// Runs on the Berserker's engine, but is a hero of its own: own guild building, card, name, 9 skills,
     /// 4 flails, look and save data.
-    [BepInPlugin("custom.pocketrogues.flagellant", "Flagellant class", "2.6.0")]
+    [BepInPlugin("custom.pocketrogues.flagellant", "Flagellant class", "2.6.6")]
     public class FlagellantPlugin : BaseUnityPlugin
     {
         internal static ManualLogSource Log;
@@ -204,6 +204,9 @@ namespace FlagellantMod
                 var iw = ch.GetComponent<IdleWhip>();
                 if (whip && iw == null) ch.gameObject.AddComponent<IdleWhip>();
                 else if (!whip && iw != null) Destroy(iw);
+                var hl = ch.GetComponent<HandsLook>();
+                if (whip && hl == null) ch.gameObject.AddComponent<HandsLook>();
+                else if (!whip && hl != null) Destroy(hl);
             }
         }
     }

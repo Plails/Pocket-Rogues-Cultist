@@ -285,3 +285,37 @@ namespace FlagellantMod
         }
     }
 }
+
+namespace FlagellantMod
+{
+    /// (the user, 2.6.5) the Cultist's second-hand slot is for whips only - like the hunter's bolts, the archer's arrows,
+    /// the wizard's book; his main slot takes any weapon as usual. The game puts a Berserker's second one-handed weapon
+    /// into the second hand: for the Cultist an ordinary weapon now takes the main hand's place instead (only whips go
+    /// to the second hand - they are moved there as before).
+    [HarmonyLib.HarmonyPatch(typeof(InventoryManager), nameof(InventoryManager.EquipThisItemButton))]
+    internal static class WhipsOnlyInSecondHandPatch
+    {
+        static readonly AccessTools.FieldRef<InventoryManager, Character> CharRef = AccessTools.FieldRefAccess<InventoryManager, Character>("character");
+
+        static void Prefix(InventoryManager __instance, ref Character __state)
+        {
+            __state = null;
+            try
+            {
+                var ch = CharRef(__instance);
+                if (ch == null || !Flag.Active || ch.charClass != CharacterClasses.BERSERKER || !(ch.ctrl is PlayerController)) return;
+                int i = __instance.selectedIndex;
+                if (i < 0 || i >= ch.inventory.Count) return;
+                if (!(ch.inventory[i] is SO_ItemWeapon w) || Weapons.IsWhip(w) || ch.Weapon == null) return;
+                ch.charClass = CharacterClasses.WARRIOR;                 // for this one call: no second weapon in the other hand
+                __state = ch;
+            }
+            catch (System.Exception e) { FlagellantPlugin.Log.LogWarning("Second hand: " + e.Message); }
+        }
+
+        static void Finalizer(Character __state)
+        {
+            if (__state != null) __state.charClass = CharacterClasses.BERSERKER;
+        }
+    }
+}
