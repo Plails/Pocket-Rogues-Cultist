@@ -51,7 +51,8 @@ namespace OccultSanctum
             if (champEntry == null && Champion.Enabled) champEntry = Entry(Champion.PrefabForBestiary(), Champion.Id, Champion.DressForBestiary);
             foreach (var e in new[] { cultistEntry, devilEntry, xbowEntry, spearEntry, elderEntry }) if (e != null && !mobs.Contains(e)) mobs.Add(e);
             // the general is a champion: on the bosses' page with the game's own champions (the user)
-            if (magusEntry == null) magusEntry = Entry(Magus.PrefabForBestiary(), Magus.Id, Magus.DressForBestiary);
+            // (0.41.0) the archmage is gone from the game and from the bestiary
+            if (magusEntry != null) { mobs.Remove(magusEntry); bosses?.Remove(magusEntry); magusEntry = null; }
             if (magusEntry != null)
             {
                 if (bosses != null) { mobs.Remove(magusEntry); if (!bosses.Contains(magusEntry)) bosses.Add(magusEntry); }   // a champion: with the bosses

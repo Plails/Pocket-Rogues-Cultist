@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace OccultSanctum
 {
-    [BepInPlugin("custom.pocketrogues.occultsanctum", "Occult Sanctum - a cultist sub-location of the Void Crypt", "0.39.3")]
+    [BepInPlugin("custom.pocketrogues.occultsanctum", "Occult Sanctum - a cultist sub-location of the Void Crypt", "0.41.2")]
     public class SanctumPlugin : BaseUnityPlugin
     {
         public static ManualLogSource Log;

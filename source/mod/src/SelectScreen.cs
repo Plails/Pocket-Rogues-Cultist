@@ -112,7 +112,7 @@ namespace FlagellantMod
             catch (Exception ex) { FlagellantPlugin.Log.LogWarning("Emblem: " + ex.Message); }
         }
 
-        private static string Name() => Texts.TryGet(Texts.Name, null, out var n) ? n : "Cultist";
+        private static string Name() => Texts.TryGet(Texts.Name, null, out var n) ? n : "Martyr";
 
         /// the card always says FLAGELLANT (every text on it except the skill points)
         public static Image BersCard;

@@ -545,21 +545,47 @@ namespace FlagellantMod
             float R = AreaRadius(ch, RangePct(sl, lvl)) * 0.8f;                 // a little smaller (the user asked; hits too)
             float costPct = FlagSkills.At(FlagSkills.T_WrathCost, l);
             float stunChance = l >= 25 ? 0.1f : l >= 12 ? 0.05f : 0f;
-            FV.Wrath(me, R);                                                    // the circles are back (the user), only smaller
+            // (2.6.8, the user) no waves or rings any more: a cross falls from the sky on every enemy in the area and hits him
             HitContainers(ch, src, me, R);
-            Shake(0.25f, 0.25f);
-            Sound(PrefabsContainerManager.Instance?.sfx_explosion, me);
+            var rt = FlagRuntime.Instance;
             int n = 0;
             foreach (var t in Enemies(ch, me, R).OrderBy(t => ((Vector2)t.transform.position - me).sqrMagnitude))
             {
-                Vector2 tp = t.transform.position;
-                FV.WrathHit(tp);
-                Strike(ch, src, sl, lvl, dmg, t, 1f);
-                if (t != null && t.alive && UnityEngine.Random.value < stunChance) Stun(ch, t, 1.2f);
+                float delay = Mathf.Min(0.5f, n * 0.06f) + UnityEngine.Random.Range(0f, 0.08f);
+                if (rt != null) rt.StartCoroutine(FallingCross(ch, src, sl, dmg, lvl, t, delay, stunChance, n == 0));
+                else { Strike(ch, src, sl, lvl, dmg, t, 1f); }
                 Pay(ch, ch.HP_max * costPct * 0.01f);
                 n++;
             }
+        }
 
+        /// one cross of Divine Punishment: it appears high above the enemy, drops (speeding up) and strikes him where he stands
+        static IEnumerator FallingCross(Character ch, Controller src, SkillLvl sl, DamageStruct dmg, int lvl, Creature t, float delay, float stunChance, bool first)
+        {
+            if (delay > 0f) yield return new WaitForSeconds(delay);
+            if (ch == null || t == null || !t.alive) yield break;
+            const float H = 4.5f, Fall = 0.26f;
+            var sr = Art.MakeSprite("fall_cross", (Vector2)t.transform.position + Vector2.up * H, 1.15f, ch, 40);
+            float k = 0f;
+            Vector2 land = t.transform.position;
+            while (k < 1f)
+            {
+                k += Time.deltaTime / Fall;
+                if (t != null && t.alive) land = t.transform.position;              // it follows him while it falls
+                float e = Mathf.Clamp01(k); e *= e;                                 // speeding up
+                if (sr != null) { sr.transform.position = land + Vector2.up * (0.35f + H * (1f - e)); sr.color = new Color(1f, 1f, 1f, Mathf.Clamp01(k * 4f)); }
+                yield return null;
+            }
+            if (ch == null) { if (sr != null) UnityEngine.Object.Destroy(sr.gameObject); yield break; }
+            if (sr != null) { sr.transform.position = land + Vector2.up * 0.35f; var f = sr.gameObject.AddComponent<FxLife>(); f.life = 0.4f; f.grow = 1f; }
+            Fx("fist_burst", land, 0f, 0.9f, FV.Holy, 0.25f, ch, 41, 1.5f);
+            Shake(0.08f, 0.08f);
+            if (first) Sound(PrefabsContainerManager.Instance?.sfx_explosion, land);
+            if (t != null && t.alive)
+            {
+                Strike(ch, src, sl, lvl, dmg, t, 1f);
+                if (t != null && t.alive && UnityEngine.Random.value < stunChance) Stun(ch, t, 1.2f);
+            }
         }
 
         // ------------------------------------------------------------------ power

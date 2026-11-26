@@ -47,6 +47,48 @@ namespace OccultSanctum
 
     public static class Builder
     {
+        /// (0.41.2, the user: no torches in the sanctum - the candles, candelabras and braziers light it) the game's own
+        /// torch light (its "Light" glow and its "LightAlt" lamp), taken off the torch and set on our fires, tinted
+        static GameObject torchPrefab;
+        public static GameObject Torch()
+        {
+            if (torchPrefab != null) return torchPrefab;
+            try { torchPrefab = gen?.decorOnWalls?.FirstOrDefault(d => d != null && d.name == "TorchActive"); } catch { }
+            if (torchPrefab == null) torchPrefab = Resources.Load<GameObject>("TorchActive");
+            return torchPrefab;
+        }
+        public static readonly Color FireLight = new Color(1f, 0.66f, 0.32f, 1f);
+        public static void Glow(Transform parent, Vector2 pos, float size, Color col)
+        {
+            try
+            {
+                var t = Torch();
+                var act = t != null ? t.transform.Find("Active") : null;
+                if (act == null) return;
+                foreach (var n in new[] { "Light", "LightAlt" })
+                {
+                    var src = act.Find(n);
+                    if (src == null) continue;
+                    var go = UnityEngine.Object.Instantiate(src.gameObject);
+                    go.name = "Sanctum_glow_" + n;
+                    if (parent != null) go.transform.SetParent(parent, true);
+                    go.transform.position = new Vector3(pos.x, pos.y, src.position.z - t.transform.position.z);
+                    go.transform.rotation = Quaternion.identity;
+                    float ps = parent != null ? Mathf.Max(0.01f, Mathf.Abs(parent.lossyScale.x)) : 1f;
+                    go.transform.localScale = src.lossyScale * size / ps;
+                    var sr = go.GetComponent<SpriteRenderer>();
+                    if (sr != null) sr.color = new Color(col.r, col.g, col.b, sr.color.a);
+                    var sf = go.GetComponent<SFLight>();
+                    if (sf != null) { sf.color = col; sf.radius = sf.radius * size; }
+                    go.SetActive(true);
+                    // it goes out with its fire: when the thing is broken (its picture changes or it is gone)
+                    var on = parent != null ? parent.GetComponentInChildren<SpriteRenderer>() : null;
+                    if (on != null) { var gl = go.AddComponent<GlowOff>(); gl.on = on; gl.onSprite = on.sprite; }
+                }
+            }
+            catch (Exception e) { SanctumPlugin.Log.LogWarning("Sanctum glow: " + e.Message); }
+        }
+
         public static Generation gen;
         public static int wallLayer, floorLayer, floorOrder, wallsLayerId, wallsOrder, env;
         public static Material floorMat, litMat;
@@ -190,6 +232,7 @@ namespace OccultSanctum
         static float R(float a, float b) => a + (float)rnd.NextDouble() * (b - a);
         static Material FloorMat => Builder.floorMat ?? Builder.litMat;
         const bool Banners = false;          // banners: off for now (the user asked to take them out)
+        static readonly bool Torches = false;  // (0.41.2, the user) no torches on the walls: the fires of the sanctum light it
 
         public static void Build(Generation gen)
         {
@@ -358,7 +401,9 @@ namespace OccultSanctum
             });
             Safe("torches", () =>
             {
-                var torch = g.decorOnWalls?.FirstOrDefault(d => d != null && d.name == "TorchActive") ?? Resources.Load<GameObject>("TorchActive");
+                // (0.41.2, the user) no torches at all: the sanctum is lit by its own candles, candelabras and braziers
+                if (!Torches) return;
+                var torch = Builder.Torch();
                 if (torch == null) return;
                 for (int x = 0; x < L.W; x++) for (int y = 1; y < L.H; y++)
                 {
@@ -462,7 +507,7 @@ namespace OccultSanctum
                 var t = fr.OrderBy(q => Mathf.Abs((W(q.x, q.y) - heart).magnitude - 3f)).First(); Mark(t.x - 1, t.y - 1, 3, 3);
                 Champion.Place(W(t.x, t.y), heart, rnd);
             });
-            Safe("archmage", () =>
+            if (false) Safe("archmage", () =>      // (0.41.0, the user) the archmage is gone from the game; Magus.cs kept for a rollback
             {
                 // the second champion, the archmage, with two cultists: a free spot farther out from the hall's heart
                 Vector2 heart = W(L.GateX, (L.ShiftY + L.TopAt(L.GateX)) / 2f);
@@ -977,14 +1022,16 @@ namespace OccultSanctum
             var cont = Make("CryptBowl", "occ_candelabra", pos, 0f, 2f, new[] { "occ_iron_destr_0", "occ_wax_destr_0", "occ_wax_destr_1" }, false, null, 0.42f, out var sr);
             Pin(cont);                                                                          // a tall iron stand: it stands fast (the user)
             Flame(cont, sr, pos, "occ_candelabra_fl_", 3, 0.13f);
+            if (cont != null) Builder.Glow(cont.transform, pos, 0.85f, Builder.FireLight);
         }
 
-        /// an iron bowl of red fire on three feet
+        /// an iron bowl of fire on three feet ((0.41.2, the user) an ordinary orange fire now, not the blood-red one; it lights the hall)
         public static void RedBrazier(Vector2 pos)
         {
-            var cont = Make("Box", "occ_brazier_red", pos, 0f, 4f, new[] { "occ_iron_destr_0", "occ_iron_destr_1", "occ_iron_destr_2" }, true, null, 0.48f, out var sr);
+            var cont = Make("Box", "occ_brazier_fire", pos, 0f, 4f, new[] { "occ_iron_destr_0", "occ_iron_destr_1", "occ_iron_destr_2" }, true, null, 0.48f, out var sr);
             Pin(cont);
-            Flame(cont, sr, pos, "occ_rfire_", 3, 0.12f);
+            Flame(cont, sr, pos, "occ_ofire_", 3, 0.12f);
+            if (cont != null) Builder.Glow(cont.transform, pos, 1.15f, Builder.FireLight);
         }
 
         /// a hooded cultist of stone on a plinth, facing the lane
@@ -1014,6 +1061,7 @@ namespace OccultSanctum
         {
             var cont = Make("Box", "occ_skullpile", pos, 0f, 3f, new[] { "occ_stone_destr_0", "occ_wax_destr_0" }, true, null, 0.45f, out var sr);
             Flame(cont, sr, pos, "occ_skullpile_fl_", 3, 0.13f);
+            if (cont != null) Builder.Glow(cont.transform, pos, 0.6f, Builder.FireLight);
         }
 
         static void Flame(Container cont, SpriteRenderer sr, Vector2 pos, string prefix, int n, float step)
@@ -1060,10 +1108,27 @@ namespace OccultSanctum
             // the flames shine on their own; they go out with the candles
             var fl = Builder.Sr("occ_flames_0", pos, sr != null ? sr.sortingLayerID : Builder.env, (sr != null ? sr.sortingOrder : 18) + 1, null, cont.transform);
             fl.gameObject.AddComponent<Flicker>().Init(new[] { "occ_flames_0", "occ_flames_1", "occ_flames_2" }, 0.13f, 0.08f, sr);
+            Builder.Glow(cont.transform, pos, 0.55f, Builder.FireLight);
         }
     }
 
     /// swaps a sprite's frames (the circle's dim glow, candle flames); goes out when what it burns on is gone
+    /// a fire's light that goes out when its thing is broken
+    public class GlowOff : MonoBehaviour
+    {
+        public SpriteRenderer on; public Sprite onSprite;
+        SpriteRenderer sr; SFLight sf; bool was = true;
+        void Start() { sr = GetComponent<SpriteRenderer>(); sf = GetComponent<SFLight>(); }
+        void Update()
+        {
+            bool lit = on != null && on.enabled && on.gameObject.activeInHierarchy && on.sprite == onSprite;
+            if (lit == was) return;
+            was = lit;
+            if (sr != null) sr.enabled = lit;
+            if (sf != null) sf.enabled = lit;
+        }
+    }
+
     public class Flicker : MonoBehaviour
     {
         Sprite[] frames; float step, jitter, nextAt; int i; SpriteRenderer sr, on; Sprite onSprite;
@@ -1095,6 +1160,7 @@ namespace OccultSanctum
         static Dictionary<string, GameObject> conts;
         public static GameObject Cont(string name)
         {
+            if (name == "Dresser") name = "Cupboard";                    // (0.41.1, the user) no chests of drawers in the sanctum at all: a cupboard stands there instead
             if (conts == null)
             {
                 conts = new Dictionary<string, GameObject>();

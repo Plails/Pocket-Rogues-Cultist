@@ -50,15 +50,31 @@ namespace OccultSanctum
             mob.lvl = Mathf.Max(1, Generation.GetRandomMobLvl() + 2);
             mob.Init();
             try { mob.HP_max = mob.HP_max * HpMult; mob.HP_cur = mob.HP_max; } catch { }
-            try { mob.attackDamage = mob.attackDamage * DmgMult; } catch { }                 // his blows hit harder (the user)
+            try { mob.attackDamage = Math.Max(mob.attackDamage, OfficerDamage()) * DmgMult; } catch { }   // his blows hit harder (the user), and grow with the level like the goblin officer's (0.40.0)
             go.transform.localScale = Vector3.one;                                    // (after Init: not the game's random size)
-            Sizer.FitChampion(go);                                                    // as big as the game's champions, always the same (the user)
-            go.AddComponent<WarCry>();                                                // the zombie guardian's rage on his friends                                             // big next to the crossbowmen (the user)
+            Sizer.FitChampion(go, Sizer.ChampionBody() * 0.9f);                       // (0.41.1, the user) the old size (the game's champions) back, a little smaller; the goblin-captain size was too small
+            go.AddComponent<WarCry>();
             Dress(go, mob);
             var ai = go.GetComponent<AIController>();
             if (ai != null) try { GameManager.Instance.AddMob(ai); } catch { }
             SanctumPlugin.Log.LogInfo("Sanctum: the general stands at " + pos + " (HP " + mob.HP_max + ")");
             return mob;
+        }
+
+        /// (0.40.0, the user: "his attacks must grow with the level just like the goblin general's") the damage the game
+        /// gives its goblin officer (a champion boss) here: his own base damage raised by the game's champion-boss
+        /// formula at the champion-boss level of this floor
+        static float OfficerDamage()
+        {
+            float baseDmg = 0f;
+            try { foreach (var b in Resources.LoadAll<BossAI_H_GoblinOfficer>("")) { var cr = b != null ? b.GetComponent<Creature>() : null; if (cr != null && cr.attackDamage > 0f) { baseDmg = cr.attackDamage; break; } } } catch { }
+            if (baseDmg <= 0f) baseDmg = 10f;
+            int lvl = 1;
+            try { lvl = Math.Max(1, BossAI.GetLvl(true)); } catch { }
+            BossAI.GetLevelStatMods(lvl, true, out _, out float dm);
+            float d = baseDmg + baseDmg * dm;
+            SanctumPlugin.Log.LogInfo("Sanctum: the general hits like the goblin officer: base " + baseDmg + ", champion level " + lvl + " -> " + d);
+            return d;
         }
 
         static void Dress(GameObject go, Mob mob)

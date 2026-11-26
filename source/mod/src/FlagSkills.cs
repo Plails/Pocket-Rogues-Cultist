@@ -183,6 +183,30 @@ namespace FlagellantMod
             return n;
         }
 
+        /// (2.6.8, the user) Religious Ecstasy shown like the Berserker's skills: the game's line "puts an effect on
+        /// himself for 15 sec" with the effect's card under it, and the card holds the damage bonus per 1% of missing HP
+        /// (level by level, "1,06 > 1,12"). Display only: the effect is put on him by FlagRuntime.StartEcstasy.
+        static Buff ecstasyCard;
+        static SkillDamageInjectContainer EcstasySelfEffect(Sprite icon)
+        {
+            if (ecstasyCard == null)
+            {
+                ecstasyCard = ScriptableObject.CreateInstance<Buff>();
+                ecstasyCard.name = "Flagellant_EcstasyCard"; ecstasyCard.hideFlags = HideFlags.HideAndDontSave;
+                ecstasyCard.buffType = BuffTypes.damageMod;
+                ecstasyCard.titleLocalized = new LocalizedString("Effects/Flagellant/ecstasy");
+                ecstasyCard.descriptionLocalized = new LocalizedString("Effects/Flagellant/ecstasy_card");
+            }
+            ecstasyCard.icon = IconOf("suffering");
+            ecstasyCard.time = 15f; ecstasyCard.timeReal = 15f; ecstasyCard.value = T_Ecstasy[0];
+            var n = Inj(SkillDamageInjectContainer.InjectTypes.AddBuffSelf, T_Ecstasy[0], 0f, time: 15f);
+            Traverse.Create(n).Field("addBuffSelf").SetValue(ecstasyCard);
+            n.showEffect = true; n.percentValue = false;
+            n.customIconPreview = icon;
+            PerLevel(n, T_Ecstasy, 0);
+            return n;
+        }
+
         /// the game's own projectile lines ("Pierces N targets", "Damage for every pierced target"), display only
         static SkillDamageInjectContainer Pierce(SkillDamageInjectContainer.InjectAmmoTypes type, float[] table, float flat = 0f, int from = 0)
         {
@@ -403,8 +427,7 @@ namespace FlagellantMod
             p2.animationID = Chest;
             foreach (var l in AllLvls(p2))
                 SetInj(l, c.DamageTypes._none,
-                    Line("duration", 15f, icon: holyIco),
-                    Line("missingHp", T_Ecstasy, icon: dmgIco),
+                    EcstasySelfEffect(holyIco),
                     Line("ecstasyDef", 1f, 12, icon: hpIco),
                     Line("regen", 50f, 25, icon: hpIco));
 

@@ -171,7 +171,8 @@ namespace OccultSanctum
                 var torch = g.decorOnWalls?.FirstOrDefault(d => d != null && d.name == "TorchActive") ?? Resources.Load<GameObject>("TorchActive");
                 float trot = Side == 'n' ? 270f : Side == 'w' ? 0f : 180f;
                 int tu = lat >= 5 ? (rnd.Next(2) == 0 ? 1 : lat - 2) : mid;
-                if (torch != null) Builder.Own(g.CreateOnWall(new[] { torch }, T(tu, far), Quaternion.Euler(0, 0, trot)));
+                // (0.41.2, the user: no torches) the torch's light alone, without the torch, a little off the far wall
+                Builder.Glow(null, T(tu, far - 1), 1.0f, Builder.FireLight);
             }
             catch (Exception e) { SanctumPlugin.Log.LogWarning("Sanctum secret torch: " + e.Message); }
             // a red runner from the way in to the far wall (in the treasury, the shrine and the ossuary)

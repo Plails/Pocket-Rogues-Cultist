@@ -10,7 +10,8 @@ namespace OccultSanctum
     /// The general stands on the hero's own frame: him the shoulders measure exactly.
     public static class Sizer
     {
-        public const float Cultist = 0.92f, Elder = 1.03f, General = 2.2f;           // (the general's body picture takes in his pauldron spikes)           // the general as big as the game's own champions (the zombie guardian's body is about twice the hero's)
+        public const float Cultist = 1.0f, Elder = 1.12f,   // (0.41.0, the user: a little bigger; were 0.92 / 1.03)
+                                  General = 2.2f;           // (the general's body picture takes in his pauldron spikes)           // the general as big as the game's own champions (the zombie guardian's body is about twice the hero's)
         const float HeroSpanIfNone = 0.30f, HeroBodyIfNone = 0.5f;
 
         static Transform Bone(Transform root, string n)
@@ -142,11 +143,25 @@ namespace OccultSanctum
             return champBody;
         }
 
+
+        // (0.41.0, the user) the general as big as the game's goblin captain champion (BossAI_H_GoblinOfficer),
+        // measured the same way; the old yardstick if the captain can't be read
+        static float goblinBody = -1f;
+        public static float GoblinCaptainBody()
+        {
+            if (goblinBody > 0f) return goblinBody;
+            float w = -1f;
+            try { foreach (var b in Resources.LoadAll<BossAI_H_GoblinOfficer>("")) { w = RefBody(b); if (w > 0.05f) break; } }
+            catch (System.Exception e) { SanctumPlugin.Log.LogWarning("Sanctum: goblin captain yardstick: " + e.Message); }
+            goblinBody = w > 0.05f ? w * LevelGrowth : ChampionBody();
+            SanctumPlugin.Log.LogInfo("Sanctum: the goblin captain's body is " + goblinBody.ToString("0.000") + (w > 0.05f ? "" : " (not measured: the champions' size)"));
+            return goblinBody;
+        }
         /// a champion made as big as the game's champions, and kept that size
-        public static void FitChampion(GameObject go)
+        public static void FitChampion(GameObject go, float body = -1f)
         {
             if (go == null) return;
-            float me = Seen(BodyOf(go)), want = ChampionBody();
+            float me = Seen(BodyOf(go)), want = body > 0f ? body : ChampionBody();
             if (me <= 0.01f) return;
             float k = Mathf.Clamp(want / me, 0.4f, 4f);
             go.transform.localScale = go.transform.localScale * k;

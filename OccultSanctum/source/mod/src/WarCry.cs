@@ -17,6 +17,7 @@ namespace OccultSanctum
         static Buff rage; static bool looked;
         Mob mob; AIController ai; Rigidbody2D rb; SpriteRenderer like;
         float next; bool casting;
+        public bool Casting => casting;
 
         /// the zombie guardian's own buff made to last 10 seconds (a copy; the game's stays as it is); if the game has
         /// not loaded it here, the same buff made anew
