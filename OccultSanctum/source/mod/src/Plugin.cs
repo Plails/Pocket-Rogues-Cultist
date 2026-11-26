@@ -10,22 +10,24 @@ using UnityEngine;
 
 namespace OccultSanctum
 {
-    [BepInPlugin("custom.pocketrogues.occultsanctum", "Occult Sanctum - a cultist sub-location of the Void Crypt", "0.41.2")]
+    [BepInPlugin("custom.pocketrogues.occultsanctum", "Occult Sanctum - a cultist sub-location of the Void Crypt", "0.42.0")]
     public class SanctumPlugin : BaseUnityPlugin
     {
         public static ManualLogSource Log;
         public static string Dir;
         public static ConfigEntry<bool> CfgEnabled;
         public static ConfigEntry<int> CfgChance, CfgFloorFrom, CfgFloorTo, CfgSecretChance;
+        public static ConfigEntry<float> CfgGateMult;
 
         private void Awake()
         {
             Log = Logger;
             Dir = Path.GetDirectoryName(Info.Location);
             CfgEnabled = Config.Bind("General", "Enabled", true, "Gates to the Occult Sanctum on Void Crypt floors (врата в Оккультное святилище на этажах Крипты Пустоты)");
-            CfgChance = Config.Bind("General", "ChancePercent", 100, "Chance that a floor gets the gates, % - 100 for testing (шанс врат на этаже, % - 100 для теста)");
-            CfgFloorFrom = Config.Bind("General", "FloorFrom", 1, "From this floor (с какого этажа)");
-            CfgFloorTo = Config.Bind("General", "FloorTo", 5, "Up to this floor (по какой этаж)");
+            CfgChance = Config.Bind("General", "ChancePercent", -1, "Chance that a floor gets the gates, %; -1 = automatic: GateChanceMultiplier times the chance of one of the game's own gates (tomb, lair, rat lair) on that floor (шанс врат на этаже, %; -1 = авто: в GateChanceMultiplier раз больше, чем у одного входа игры - склепа, логова, крысиного логова)");
+            CfgGateMult = Config.Bind("General", "GateChanceMultiplier", 2f, "With ChancePercent = -1: how many times more often than one game gate (во сколько раз чаще одного входа игры)");
+            CfgFloorFrom = Config.Bind("General", "FloorFrom", 1, "From this floor of the Void Crypt / Catacombs (с какого этажа Крипты Пустоты / Катакомб)");
+            CfgFloorTo = Config.Bind("General", "FloorTo", 999, "Up to this floor (по какой этаж)");
             CfgSecretChance = Config.Bind("General", "SecretRoomChancePercent", 100, "Chance of a secret room behind a breakable wall, % - 100 for testing (шанс секретной комнаты за ломаемой стеной, % - 100 для теста)");
             new Harmony("custom.pocketrogues.occultsanctum").PatchAll();
             var go = new GameObject("SanctumDirector");

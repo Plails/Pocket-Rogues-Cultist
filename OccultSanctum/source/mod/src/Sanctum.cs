@@ -34,7 +34,10 @@ namespace OccultSanctum
             var gmg = GenerationManager.Instance;
             if (gm == null || gmg == null) return;
             if (!SanctumPlugin.CfgEnabled.Value || gm.IsConnected || gm.BossArena) { done = true; return; }
-            if (gm.location != Locations.crypt || gmg.mapType != c.MapTypes.CRYPT) { done = true; return; }
+            // (0.42.0, the user) on Void Crypt AND Catacombs floors
+            bool crypt = gm.location == Locations.crypt && gmg.mapType == c.MapTypes.CRYPT;
+            bool cata = gm.location == Locations.catacombs && gmg.mapType == c.MapTypes.CATACOMBS;
+            if (!crypt && !cata) { done = true; return; }
             if (!gmg.WasGenerated || gm.Player_Mine() == null) return;
             done = true;
             try { if (FileBasedPrefs.GetInt("ObsidianTowerMode") == 1) return; } catch { }
@@ -122,7 +125,9 @@ namespace OccultSanctum
             // decided by the floor's own map: a floor loaded from a save gets the same gates at the same place
             string key = deep + "|" + w + "x" + h + "|" + n;
             var rng = new System.Random(deep * 7919 + w * 131 + h * 17 + n);
-            if (rng.Next(100) >= SanctumPlugin.CfgChance.Value) { SanctumPlugin.Log.LogInfo("Sanctum: no gates on crypt floor " + deep); return; }
+            float chance = GateChance(out string why);
+            if (rng.NextDouble() >= chance) { SanctumPlugin.Log.LogInfo("Sanctum: no gates on floor " + deep + " (chance " + (chance * 100f).ToString("0.#") + "%, " + why + ")"); return; }
+            SanctumPlugin.Log.LogInfo("Sanctum: gates on floor " + deep + " (chance " + (chance * 100f).ToString("0.#") + "%, " + why + ")");
             // the spot is remembered for this floor: on a floor loaded from a save, far-away crates and monsters have
             // their colliders switched off, so a fresh search would pick another wall (the gates came back elsewhere)
             Vector2? spot = null;
@@ -141,8 +146,61 @@ namespace OccultSanctum
                 PlayerPrefs.Save();
             }
             bool used = Flow.UsedFloor == key;
-            Gate.Create(spot.Value, false, used, key, wallsLayerId, wallsOrder, litMat, wallLayer, root);
+            var gate = Gate.Create(spot.Value, false, used, key, wallsLayerId, wallsOrder, litMat, wallLayer, root);
+            MapIcon(gate != null ? gate.gameObject : null);
             SanctumPlugin.Log.LogInfo($"Sanctum: gates on crypt floor {deep} at {spot.Value}{(used ? " (already used: blocked)" : "")}");
+        }
+
+        /// (0.42.0, the user) the gates come twice as often as any one of the game's own gates on this floor (the tomb,
+        /// the lair, the rat lair...): the game puts one gate on a floor with a 75% chance, picked evenly from this
+        /// floor's list of gates - so each of them has 75% / their number, and ours twice that. ChancePercent >= 0 in
+        /// the config sets it by hand instead.
+        static float GateChance(out string why)
+        {
+            int manual = SanctumPlugin.CfgChance.Value;
+            if (manual >= 0) { why = "set by hand"; return Mathf.Clamp01(manual / 100f); }
+            int left = gen.Gates != null ? gen.Gates.Count(x => x != null) : 0;
+            int placed = GameGatesOnFloor().Count;                                   // the one the game put here left its list
+            int all = Mathf.Max(1, left + placed);
+            float one = 0.75f / all;
+            why = "the game's " + all + " gates here: " + (one * 100f).ToString("0.#") + "% each, ours x" + SanctumPlugin.CfgGateMult.Value;
+            return Mathf.Clamp01(one * SanctumPlugin.CfgGateMult.Value);
+        }
+
+        static List<GameObject> GameGatesOnFloor()
+        {
+            var l = new List<GameObject>();
+            try
+            {
+                foreach (var m in UnityEngine.Object.FindObjectsOfType<UO_Move_to_Location>())
+                    if (m != null && m.GetComponentInParent<Gate>() == null && m.transform.root.name.IndexOf("Gates", StringComparison.OrdinalIgnoreCase) >= 0) l.Add(m.transform.root.gameObject);
+            }
+            catch { }
+            return l;
+        }
+
+        /// the mark on the map like the game's gates have (the tomb's, the lair's): their own MinimapTarget, copied
+        static GameObject iconPrefab; static MinimapTarget.MinimapTypes iconType = MinimapTarget.MinimapTypes.floor; static Color iconColor = Color.white; static float iconRot;
+        static void MapIcon(GameObject gate)
+        {
+            if (gate == null) return;
+            try
+            {
+                if (iconPrefab == null)
+                {
+                    var from = new List<GameObject>();
+                    if (gen.Gates != null) from.AddRange(gen.Gates.Where(x => x != null));
+                    from.AddRange(GameGatesOnFloor());
+                    var mt = from.OrderBy(x => x.name.StartsWith("SubLocGates", StringComparison.Ordinal) ? 0 : 1)
+                                 .Select(x => x.GetComponentInChildren<MinimapTarget>(true)).FirstOrDefault(x => x != null && x.MinimapIcon != null);
+                    if (mt == null) { SanctumPlugin.Log.LogWarning("Sanctum: no game gate to copy the map mark from"); return; }
+                    iconPrefab = mt.MinimapIcon; iconType = mt.minimapType; iconColor = mt.customColor; iconRot = mt.rotateOffset;
+                    SanctumPlugin.Log.LogInfo("Sanctum: map mark from " + mt.transform.root.name + " (" + iconPrefab.name + ", " + iconType + ")");
+                }
+                var t = gate.AddComponent<MinimapTarget>();
+                t.MinimapIcon = iconPrefab; t.minimapType = iconType; t.customColor = iconColor; t.rotateOffset = iconRot;
+            }
+            catch (Exception e) { SanctumPlugin.Log.LogWarning("Sanctum map mark: " + e.Message); }
         }
 
         /// a stretch of north wall 4 tiles wide with open floor in front of it, away from the stairs
