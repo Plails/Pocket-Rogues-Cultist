@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using HarmonyLib;
@@ -72,7 +72,7 @@ namespace FlagellantMod
             // the real Berserker card keeps saying BERSERKER (its own translation would turn into ours while he is chosen)
             BersCard = bers;
             foreach (var loc in bers.GetComponentsInChildren<I2.Loc.Localize>(true)) UnityEngine.Object.DestroyImmediate(loc);
-            AddEmblem(go);
+            // no emblem in the corner of the card (the user, 2026-11-27)
             if (bers.transform.parent.GetComponent<LayoutGroup>() == null)
             {
                 var rt = (RectTransform)go.transform;
@@ -98,7 +98,7 @@ namespace FlagellantMod
             {
                 var sp = Fortress.Icon();
                 if (sp == null) return;
-                var e = new GameObject("FlagellantEmblem", typeof(RectTransform));
+                var e = new GameObject("FlagellantEmblem_unused", typeof(RectTransform));
                 e.transform.SetParent(card.transform, false);
                 var rt = (RectTransform)e.transform;
                 rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);

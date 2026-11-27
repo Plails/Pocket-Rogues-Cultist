@@ -149,6 +149,16 @@ namespace FlagellantMod
 
         public static Vector3 IconLocal, IconScale = Vector3.one, TxtLocal, TxtScale = Vector3.one;
         static Vector2 iconSize, txtSize;
+        /// (the user, 2026-11-27: the icon twitched on entering the guild) where the parts were placed last time -
+        /// used at once on the next visit; until the first placing they are invisible
+        static bool savedIcon, savedTxt;
+        static Vector3 savedIconPos, savedIconScale, savedTxtPos, savedTxtScale;
+        static void Show(RectTransform h, bool on)
+        {
+            if (h == null) return;
+            var g = h.GetComponent<CanvasGroup>() ?? h.gameObject.AddComponent<CanvasGroup>();
+            g.alpha = on ? 1f : 0f; g.blocksRaycasts = false; g.interactable = false;
+        }
 
         /// The game moves every building's icon and number into one shared container; for ours that put them off
         /// the building. So ours stay the building's own children (in holders), on top of its frame.
@@ -221,6 +231,11 @@ namespace FlagellantMod
             if (b.iconImage != null && iconHolder != null) ok &= Measure(b, iconHolder, (RectTransform)b.iconImage.transform, b.Parent?.iconImage?.transform, ref iconSize);
             if (b.txt != null && txtHolder != null) ok &= Measure(b, txtHolder, (RectTransform)b.txt.transform, b.Parent?.txt?.transform, ref txtSize);
             if (ok || ++tries >= 6) Measured = true;
+            if (Measured)
+            {
+                if (iconHolder != null) { savedIcon = true; savedIconPos = iconHolder.localPosition; savedIconScale = iconHolder.localScale; Show(iconHolder, true); }
+                if (txtHolder != null) { savedTxt = true; savedTxtPos = txtHolder.localPosition; savedTxtScale = txtHolder.localScale; Show(txtHolder, true); }
+            }
             FlagellantPlugin.Log.LogInfo("Fortress: icon measured=" + ok + " size " + iconSize + " holder " + (iconHolder ? iconHolder.localPosition + " x" + iconHolder.localScale.x.ToString("0.00") : "-"));
         }
 
@@ -239,8 +254,13 @@ namespace FlagellantMod
                 {
                     t.SetParent(hold, false);
                     Center(t, iconSize);
-                    if (!Measured) { hold.localPosition = Vector3.zero; hold.localScale = Vector3.one; }
+                    if (!Measured)
+                    {
+                        if (savedIcon) { hold.localPosition = savedIconPos; hold.localScale = savedIconScale; }
+                        else { hold.localPosition = Vector3.zero; hold.localScale = Vector3.one; }
+                    }
                 }
+                Show(hold, Measured || savedIcon);
                 b.iconImage.preserveAspect = true;
                 b.iconImage.enabled = true;
                 hold.SetAsLastSibling();
@@ -253,8 +273,13 @@ namespace FlagellantMod
                 {
                     t.SetParent(hold, false);
                     Center(t, txtSize);
-                    if (!Measured) { hold.localPosition = new Vector3(bsz.x * 0.2f, -bsz.y * 0.3f, 0f); hold.localScale = Vector3.one; }
+                    if (!Measured)
+                    {
+                        if (savedTxt) { hold.localPosition = savedTxtPos; hold.localScale = savedTxtScale; }
+                        else { hold.localPosition = new Vector3(bsz.x * 0.2f, -bsz.y * 0.3f, 0f); hold.localScale = Vector3.one; }
+                    }
                 }
+                Show(hold, Measured || savedTxt);
                 var his = b.Parent != null ? b.Parent.txt : null;
                 if (his != null) { b.txt.fontSize = his.fontSize; b.txt.alignment = his.alignment; }
                 hold.SetAsLastSibling();
